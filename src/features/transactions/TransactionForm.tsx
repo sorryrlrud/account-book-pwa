@@ -61,6 +61,18 @@ function buildEditState(transaction: Transaction): TransactionFormState {
   }
 }
 
+function buildOptions(activeItems: string[], retainedItems: Array<string | undefined>) {
+  const active = new Set(activeItems)
+  const retained = [...new Set(retainedItems.filter(
+    (item): item is string => Boolean(item) && !active.has(item as string),
+  ))]
+
+  return [
+    ...retained.map((value) => ({ value, label: `${value} (사용중지)` })),
+    ...activeItems.map((value) => ({ value, label: value })),
+  ]
+}
+
 export function TransactionForm({
   mode = 'create',
   title,
@@ -85,13 +97,12 @@ export function TransactionForm({
       : buildCreateState(accounts),
   )
   const [validationMessage, setValidationMessage] = useState('')
+  const [typeConfirmed, setTypeConfirmed] = useState(
+    initialTransaction?.type !== 'unknown',
+  )
 
   useEffect(() => {
-    if (initialTransaction) {
-      setForm(buildEditState(initialTransaction))
-      return
-    }
-
+    if (initialTransaction) return
     setForm((current) => {
       const nextAccount = current.account || accounts[0] || ''
       const nextDestination =
@@ -105,7 +116,15 @@ export function TransactionForm({
         destinationAccount: nextDestination ?? '',
       }
     })
-  }, [accounts, categories, initialTransaction])
+  }, [accounts, initialTransaction])
+
+  useEffect(() => {
+    if (initialTransaction) {
+      setForm(buildEditState(initialTransaction))
+      setValidationMessage('')
+      setTypeConfirmed(initialTransaction.type !== 'unknown')
+    }
+  }, [initialTransaction])
 
   useEffect(() => {
     if (resetState && !initialTransaction) {
@@ -128,6 +147,7 @@ export function TransactionForm({
 
   const handleTypeChange = (type: EntryTab) => {
     setValidationMessage('')
+    setTypeConfirmed(true)
     setForm((current) => ({
       ...current,
       type,
@@ -142,6 +162,10 @@ export function TransactionForm({
   }
 
   const validate = () => {
+    if (initialTransaction?.type === 'unknown' && !typeConfirmed) {
+      return '기존 거래의 유형을 지출·수입·이체 중에서 확인해 주세요.'
+    }
+
     if (!form.date || Number.isNaN(new Date(form.date).getTime())) {
       return '날짜를 확인해 주세요.'
     }
@@ -181,10 +205,29 @@ export function TransactionForm({
   }
 
   const validationError = validate()
+  const contextualValidationMessage = validationMessage || (
+    form.type === 'transfer' &&
+    form.account &&
+    form.destinationAccount &&
+    form.account === form.destinationAccount
+      ? validationError
+      : ''
+  )
+  const referenceMessage = accounts.length === 0
+    ? '설정에서 사용할 통장을 먼저 등록해 주세요.'
+    : form.type !== 'transfer' && categories.length === 0
+      ? '설정에서 사용할 카테고리를 먼저 등록해 주세요.'
+      : ''
+  const accountOptions = buildOptions(accounts, [
+    initialTransaction?.account,
+    initialTransaction?.destinationAccount,
+  ])
+  const categoryOptions = buildOptions(categories, [initialTransaction?.category])
 
   const handleReset = () => {
     if (initialTransaction) {
       setForm(buildEditState(initialTransaction))
+      setTypeConfirmed(initialTransaction.type !== 'unknown')
       return
     }
 
@@ -262,8 +305,8 @@ export function TransactionForm({
             key={type}
             type="button"
             role="tab"
-            aria-selected={form.type === type}
-            className={`segmented__button${form.type === type ? ' is-active' : ''}`}
+            aria-selected={typeConfirmed && form.type === type}
+            className={`segmented__button${typeConfirmed && form.type === type ? ' is-active' : ''}`}
             onClick={() => handleTypeChange(type)}
             disabled={isBusy}
           >
@@ -271,6 +314,12 @@ export function TransactionForm({
           </button>
         ))}
       </div>
+
+      {initialTransaction?.type === 'unknown' && !typeConfirmed ? (
+        <p className="form-status" role="status">
+          이 거래는 원장에서 유형을 판단할 수 없습니다. 저장하기 전에 거래 유형을 선택해 주세요.
+        </p>
+      ) : null}
 
       <div className="date-wheel" aria-label="날짜 조절">
         <button
@@ -341,9 +390,9 @@ export function TransactionForm({
             <option value="" disabled>
               통장을 선택하세요
             </option>
-            {accounts.map((account) => (
-              <option key={account} value={account}>
-                {account}
+            {accountOptions.map((account) => (
+              <option key={account.value} value={account.value}>
+                {account.label}
               </option>
             ))}
           </select>
@@ -363,9 +412,9 @@ export function TransactionForm({
               <option value="" disabled>
                 입금 통장 선택
               </option>
-              {accounts.map((account) => (
-                <option key={account} value={account}>
-                  {account}
+              {accountOptions.map((account) => (
+                <option key={account.value} value={account.value}>
+                  {account.label}
                 </option>
               ))}
             </select>
@@ -382,9 +431,9 @@ export function TransactionForm({
               <option value="" disabled>
                 카테고리 선택
               </option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
+              {categoryOptions.map((category) => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
                 </option>
               ))}
             </select>
@@ -393,9 +442,10 @@ export function TransactionForm({
         )}
       </div>
 
-      {validationMessage ? <p className="form-error">{validationMessage}</p> : null}
-      {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
-      {statusMessage ? <p className="form-status">{statusMessage}</p> : null}
+      {contextualValidationMessage ? <p className="form-error" role="alert">{contextualValidationMessage}</p> : null}
+      {referenceMessage ? <p className="form-status" role="status">{referenceMessage}</p> : null}
+      {errorMessage ? <p className="form-error" role="alert">{errorMessage}</p> : null}
+      {statusMessage ? <p className="form-status" role="status" aria-live="polite">{statusMessage}</p> : null}
 
       <div className="form-actions">
         <button

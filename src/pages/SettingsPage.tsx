@@ -1,27 +1,32 @@
-import { CONTROL_STYLE } from '@/features/readViews/formatters'
 import { SettingsSection } from '@/features/settings/components/SettingsSection'
 import type {
   EditableAccount,
   EditableCategory,
   SettingsYearLinkDraft,
   SettingsYearLinkItem,
-  SyncConfirmation,
+  SettingsConfirmation,
 } from '@/features/settings/types'
 
 export interface SettingsPageProps {
   newAccountName: string
   newCategoryName: string
+  newCategoryBudgetGroup: string
+  budgetGroups: string[]
   accounts: EditableAccount[]
   categories: EditableCategory[]
   yearLinks: SettingsYearLinkItem[]
   yearLinkDraft: SettingsYearLinkDraft
-  syncConfirmation?: SyncConfirmation
+  confirmation?: SettingsConfirmation
+  isBusy?: boolean
+  canWrite?: boolean
+  canSyncMonthZero?: boolean
   onNewAccountNameChange: (name: string) => void
   onAccountDraftNameChange: (accountName: string, draftName: string) => void
   onAccountCreate: () => void
   onAccountDisableToggle: (accountName: string, active: boolean) => void
   onAccountRename: (accountName: string) => void
   onNewCategoryNameChange: (name: string) => void
+  onNewCategoryBudgetGroupChange: (name: string) => void
   onCategoryDraftNameChange: (categoryName: string, draftName: string) => void
   onCategoryCreate: () => void
   onCategoryDisableToggle: (categoryName: string, active: boolean) => void
@@ -33,48 +38,59 @@ export interface SettingsPageProps {
   onLogout: () => void
 }
 
-function renderSyncConfirmation(syncConfirmation?: SyncConfirmation) {
-  if (!syncConfirmation?.open) {
+function renderConfirmation(confirmation?: SettingsConfirmation, isBusy = false) {
+  if (!confirmation?.open) {
     return null
   }
 
   return (
-    <section
-      className="settings-page__confirmation"
-      role="dialog"
-      aria-labelledby="settings-sync-title"
-      style={{ border: '1px solid currentColor', borderRadius: '16px', padding: '16px' }}
-    >
-      <h2 id="settings-sync-title" style={{ marginTop: 0 }}>
-        {syncConfirmation.title}
-      </h2>
-      <p>{syncConfirmation.description}</p>
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <button type="button" onClick={syncConfirmation.onConfirm} style={{ ...CONTROL_STYLE, minWidth: '120px' }}>
-          {syncConfirmation.confirmLabel}
-        </button>
-        <button type="button" onClick={syncConfirmation.onCancel} style={{ ...CONTROL_STYLE, minWidth: '120px' }}>
-          {syncConfirmation.cancelLabel ?? '취소'}
-        </button>
-      </div>
-    </section>
+    <div className="confirmation-overlay">
+      <section
+        className={`panel confirmation-dialog settings-page__confirmation${confirmation.tone === 'danger' ? ' is-danger' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-confirmation-title"
+      >
+        <h3 id="settings-confirmation-title">{confirmation.title}</h3>
+        <p>{confirmation.description}</p>
+        <div className="confirmation-actions">
+          <button
+            type="button"
+            className={confirmation.tone === 'danger' ? 'primary-button primary-button--danger' : 'primary-button'}
+            onClick={confirmation.onConfirm}
+            disabled={isBusy}
+          >
+            {isBusy ? '처리 중...' : confirmation.confirmLabel}
+          </button>
+          <button type="button" className="secondary-button" onClick={confirmation.onCancel} disabled={isBusy} autoFocus>
+            {confirmation.cancelLabel ?? '취소'}
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }
 
 export default function SettingsPage({
   newAccountName,
   newCategoryName,
+  newCategoryBudgetGroup,
+  budgetGroups,
   accounts,
   categories,
   yearLinks,
   yearLinkDraft,
-  syncConfirmation,
+  confirmation,
+  isBusy = false,
+  canWrite = true,
+  canSyncMonthZero = true,
   onNewAccountNameChange,
   onAccountDraftNameChange,
   onAccountCreate,
   onAccountDisableToggle,
   onAccountRename,
   onNewCategoryNameChange,
+  onNewCategoryBudgetGroupChange,
   onCategoryDraftNameChange,
   onCategoryCreate,
   onCategoryDisableToggle,
@@ -86,63 +102,63 @@ export default function SettingsPage({
   onLogout,
 }: SettingsPageProps) {
   return (
-    <section className="settings-page" style={{ display: 'grid', gap: '16px' }}>
-      <header className="settings-page__header" style={{ display: 'grid', gap: '12px' }}>
+    <section className="read-page settings-page">
+      <header className="read-page__header settings-page__header">
         <div>
-          <p className="settings-page__eyebrow" style={{ margin: 0 }}>
+          <p className="read-page__eyebrow settings-page__eyebrow">
             설정
           </p>
-          <h1 className="settings-page__title" style={{ margin: '8px 0 0' }}>
+          <h2 className="read-page__title settings-page__title">
             계정 및 기준 정보
-          </h1>
+          </h2>
         </div>
-        <div className="settings-page__account-actions" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <button type="button" onClick={onLogout} style={{ ...CONTROL_STYLE, minWidth: '120px' }}>
+        <div className="settings-page__account-actions">
+          <button type="button" className="secondary-button" onClick={onLogout} disabled={isBusy}>
             로그아웃
           </button>
         </div>
-        <p className="settings-page__account-email" style={{ margin: 0 }}>
+        <p className="settings-page__account-email">
           Google 계정 연결 상태: 연결됨
         </p>
       </header>
 
-      <SettingsSection title="통장 관리" description="새 통장을 추가하고 이름 변경 또는 사용 여부를 조정합니다.">
-        <div className="settings-page__accounts" style={{ display: 'grid', gap: '12px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px' }}>
-            <label style={{ display: 'grid', gap: '6px' }}>
+      <SettingsSection title="통장 관리" description="새 통장을 추가하고 이름을 바꾸거나 신규 거래에서 사용중지할 수 있습니다.">
+        <div className="settings-page__collection">
+          <div className="settings-page__category-create">
+            <label className="field">
               <span>새 통장 이름</span>
               <input
                 type="text"
                 value={newAccountName}
                 onChange={(event) => onNewAccountNameChange(event.target.value)}
-                style={CONTROL_STYLE}
+                disabled={isBusy || !canWrite}
               />
             </label>
-            <button type="button" onClick={onAccountCreate} disabled={!newAccountName.trim()} style={{ ...CONTROL_STYLE, alignSelf: 'end' }}>
+            <button type="button" className="primary-button" onClick={onAccountCreate} disabled={isBusy || !canWrite || !newAccountName.trim()}>
               추가
             </button>
           </div>
           {accounts.map((account) => (
-            <article key={account.name} className="settings-page__account-row" style={{ display: 'grid', gap: '8px' }}>
-              <label style={{ display: 'grid', gap: '6px' }}>
+            <article key={account.name} className={`settings-page__item${account.active ? '' : ' is-inactive'}`}>
+              <label className="field">
                 <span>{account.name}</span>
                 <input
                   type="text"
                   value={account.draftName}
                   onChange={(event) => onAccountDraftNameChange(account.name, event.target.value)}
                   className="settings-page__input settings-page__input--account"
-                  style={CONTROL_STYLE}
+                  disabled={isBusy || !canWrite}
                 />
               </label>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <button type="button" onClick={() => onAccountRename(account.name)} style={{ ...CONTROL_STYLE, minWidth: '120px' }}>
+              <div className="settings-page__item-actions">
+                <button type="button" className="secondary-button" onClick={() => onAccountRename(account.name)} disabled={isBusy || !canWrite || !account.draftName.trim() || account.draftName.trim() === account.name}>
                   이름 변경
                 </button>
                 <button
                   type="button"
                   onClick={() => onAccountDisableToggle(account.name, !account.active)}
-                  disabled={!account.active}
-                  style={{ ...CONTROL_STYLE, minWidth: '120px' }}
+                  className="text-button text-button--danger"
+                  disabled={isBusy || !canWrite || !account.active}
                 >
                   {account.active ? '사용중지' : '사용중지됨'}
                 </button>
@@ -152,43 +168,61 @@ export default function SettingsPage({
         </div>
       </SettingsSection>
 
-      <SettingsSection title="카테고리 관리" description="카테고리를 추가하고 이름 변경 또는 사용 여부를 조정합니다.">
-        <div className="settings-page__categories" style={{ display: 'grid', gap: '12px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px' }}>
-            <label style={{ display: 'grid', gap: '6px' }}>
+      <SettingsSection title="카테고리 관리" description="카테고리를 추가하고 이름을 바꾸거나 신규 거래에서 사용중지할 수 있습니다.">
+        <div className="settings-page__collection">
+          <div className="settings-page__create-row">
+            <label className="field">
               <span>새 카테고리 이름</span>
               <input
                 type="text"
                 value={newCategoryName}
                 onChange={(event) => onNewCategoryNameChange(event.target.value)}
-                style={CONTROL_STYLE}
+                disabled={isBusy || !canWrite}
               />
             </label>
-            <button type="button" onClick={onCategoryCreate} disabled={!newCategoryName.trim()} style={{ ...CONTROL_STYLE, alignSelf: 'end' }}>
+            <label className="field">
+              <span>예산 그룹</span>
+              <select
+                value={newCategoryBudgetGroup}
+                onChange={(event) => onNewCategoryBudgetGroupChange(event.target.value)}
+                disabled={isBusy || !canWrite}
+              >
+                <option value="">예산에 포함하지 않음</option>
+                {budgetGroups.map((groupName) => (
+                  <option key={groupName} value={groupName}>{groupName}</option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="primary-button" onClick={onCategoryCreate} disabled={isBusy || !canWrite || !newCategoryName.trim()}>
               추가
             </button>
           </div>
           {categories.map((category) => (
-            <article key={category.name} className="settings-page__category-row" style={{ display: 'grid', gap: '8px' }}>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span>{category.name}</span>
+            <article key={category.name} className={`settings-page__item${category.active ? '' : ' is-inactive'}`}>
+              <label className="field">
+                <span>
+                  {category.name}
+                  <small className="settings-page__item-meta">
+                    {category.budgetGroup ? `예산 · ${category.budgetGroup}` : '예산 미포함'}
+                  </small>
+                </span>
                 <input
                   type="text"
                   value={category.draftName}
                   onChange={(event) => onCategoryDraftNameChange(category.name, event.target.value)}
                   className="settings-page__input settings-page__input--category"
-                  style={CONTROL_STYLE}
+                  disabled={isBusy || !canWrite}
                 />
               </label>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <button type="button" onClick={() => onCategoryRename(category.name)} style={{ ...CONTROL_STYLE, minWidth: '120px' }}>
+              <div className="settings-page__item-actions">
+                <button type="button" className="secondary-button" onClick={() => onCategoryRename(category.name)} disabled={isBusy || !canWrite || !category.draftName.trim() || category.draftName.trim() === category.name}>
                   이름 변경
                 </button>
                 <button
                   type="button"
                   onClick={() => onCategoryDisableToggle(category.name, !category.active)}
-                  disabled={!category.active}
-                  style={{ ...CONTROL_STYLE, minWidth: '120px' }}
+                  className="text-button text-button--danger"
+                  disabled={isBusy || !canWrite || !category.active}
                 >
                   {category.active ? '사용중지' : '사용중지됨'}
                 </button>
@@ -199,9 +233,9 @@ export default function SettingsPage({
       </SettingsSection>
 
       <SettingsSection title="연도 연결" description="연도별 시트를 등록하고 바로 열 수 있습니다.">
-        <div className="settings-page__years" style={{ display: 'grid', gap: '12px' }}>
-          <div className="settings-page__year-form" style={{ display: 'grid', gap: '8px' }}>
-            <label style={{ display: 'grid', gap: '6px' }}>
+        <div className="settings-page__years">
+          <div className="settings-page__year-form">
+            <label className="field">
               <span>연도</span>
               <input
                 type="text"
@@ -214,10 +248,10 @@ export default function SettingsPage({
                   })
                 }
                 className="settings-page__input settings-page__input--year"
-                style={CONTROL_STYLE}
+                disabled={isBusy || !canWrite}
               />
             </label>
-            <label style={{ display: 'grid', gap: '6px' }}>
+            <label className="field">
               <span>시트 URL</span>
               <input
                 type="url"
@@ -229,30 +263,30 @@ export default function SettingsPage({
                   })
                 }
                 className="settings-page__input settings-page__input--url"
-                style={CONTROL_STYLE}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                disabled={isBusy || !canWrite}
               />
             </label>
-            <button type="button" onClick={onYearLinkSubmit} style={{ ...CONTROL_STYLE, minWidth: '120px' }}>
+            <button type="button" className="primary-button" onClick={onYearLinkSubmit} disabled={isBusy || !canWrite || !yearLinkDraft.year.trim() || !yearLinkDraft.spreadsheetUrl.trim()}>
               연도 연결 저장
             </button>
           </div>
-          <ul className="settings-page__year-list" style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '10px' }}>
+          <ul className="settings-page__year-list">
             {yearLinks.map((yearLink) => (
               <li
                 key={yearLink.year}
                 className="settings-page__year-item"
-                style={{ border: '1px solid currentColor', borderRadius: '12px', padding: '12px' }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="settings-page__year-heading">
                   <div>
                     <strong>{yearLink.year}년</strong>
-                    <p style={{ margin: '6px 0 0' }}>{yearLink.connected ? '연결됨' : '미연결'}</p>
+                    <p>{yearLink.connected ? '연결됨' : '미연결'}</p>
                   </div>
-                  <button type="button" onClick={() => onOpenSheet(yearLink.year)} style={{ ...CONTROL_STYLE, minWidth: '120px' }}>
+                  <button type="button" className="secondary-button" onClick={() => onOpenSheet(yearLink.year)}>
                     시트 열기
                   </button>
                 </div>
-                {yearLink.spreadsheetUrl ? <p style={{ margin: '8px 0 0' }}>{yearLink.spreadsheetUrl}</p> : null}
+                <p className="settings-page__spreadsheet-id">Spreadsheet ID · {yearLink.spreadsheetId}</p>
               </li>
             ))}
           </ul>
@@ -263,17 +297,18 @@ export default function SettingsPage({
         title="월 0 동기화"
         description="월 0은 일방향 동기화입니다. 실행하면 기준 시트의 값으로 덮어쓰므로 확인이 필요합니다."
       >
-        <div className="settings-page__sync" style={{ display: 'grid', gap: '12px' }}>
-          <p className="settings-page__sync-warning" style={{ margin: 0, color: '#9a3412' }}>
+        <div className="settings-page__sync">
+          <p className="settings-page__sync-warning">
             월 0 동기화는 되돌릴 수 없습니다.
           </p>
-          <button type="button" onClick={onRequestMonthZeroSync} style={{ ...CONTROL_STYLE, minWidth: '160px' }}>
+          {!canSyncMonthZero ? <p className="form-status">이전 연도 Sheet를 먼저 연결해야 합니다.</p> : null}
+          <button type="button" className="secondary-button secondary-button--danger" onClick={onRequestMonthZeroSync} disabled={isBusy || !canWrite || !canSyncMonthZero}>
             월 0 동기화 확인
           </button>
         </div>
       </SettingsSection>
 
-      {renderSyncConfirmation(syncConfirmation)}
+      {renderConfirmation(confirmation, isBusy)}
     </section>
   )
 }

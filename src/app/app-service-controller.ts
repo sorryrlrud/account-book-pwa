@@ -424,7 +424,12 @@ export class AppServiceController {
     }
 
     const run = async () => {
-      const services = this.#requireServices()
+      // An unconfigured app already exposes a complete setup state. Session
+      // restoration is a no-op there rather than an unhandled rejected promise.
+      const services = this.#services
+      if (!services) {
+        return
+      }
       const snapshot = services.tokenStore.get()
       if (!snapshot) {
         return

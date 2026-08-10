@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAppService } from '@/app/use-app-service.ts'
 
@@ -20,6 +20,22 @@ export function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [actionError, setActionError] = useState('')
   const location = useLocation()
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 })
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        setActionError('')
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [menuOpen])
 
   const closeMenu = () => {
     setMenuOpen(false)
@@ -50,7 +66,7 @@ export function AppShell() {
           className="icon-button"
           aria-expanded={menuOpen}
           aria-controls="app-menu-panel"
-          aria-label="메뉴 열기"
+          aria-label={menuOpen ? '메뉴 닫기' : '메뉴 열기'}
           onClick={() => setMenuOpen((value) => !value)}
         >
           <span />
@@ -63,10 +79,13 @@ export function AppShell() {
         id="app-menu-panel"
         className={`menu-panel${menuOpen ? ' is-open' : ''}`}
         aria-hidden={!menuOpen}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-menu-title"
       >
         <div className="menu-panel__card">
           <div className="menu-panel__header">
-            <h2>메뉴</h2>
+            <h2 id="app-menu-title">메뉴</h2>
             <button
               type="button"
               className="text-button"
@@ -82,7 +101,9 @@ export function AppShell() {
                 <li key={item.to}>
                   <NavLink
                     to={item.to}
-                    className="menu-link"
+                    className={({ isActive }) =>
+                      `menu-link${isActive ? ' is-active' : ''}`
+                    }
                     onClick={closeMenu}
                   >
                     {item.label}

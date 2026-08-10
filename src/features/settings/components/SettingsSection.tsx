@@ -8,16 +8,13 @@ export interface SettingsSectionProps {
 
 export function SettingsSection({ title, description, children }: SettingsSectionProps) {
   return (
-    <section
-      className="settings-section"
-      style={{ border: '1px solid currentColor', borderRadius: '16px', padding: '16px' }}
-    >
-      <header className="settings-section__header" style={{ marginBottom: '12px' }}>
-        <h2 className="settings-section__title" style={{ margin: 0 }}>
+    <section className="panel settings-section">
+      <header className="settings-section__header">
+        <h2 className="settings-section__title">
           {title}
         </h2>
         {description ? (
-          <p className="settings-section__description" style={{ margin: '8px 0 0' }}>
+          <p className="settings-section__description">
             {description}
           </p>
         ) : null}

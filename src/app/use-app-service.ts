@@ -30,18 +30,21 @@ export function useCurrentYearMonth() {
 export function useReferenceData(year?: number) {
   const service = useAppService()
   const [data, setData] = useState<TransactionReferenceData>(EMPTY_REFERENCE_DATA)
+  const targetYear = year ?? service.currentYear
+  const canRead = service.auth.canRead
+  const getReferenceData = service.getReferenceData
 
   useEffect(() => {
     let active = true
 
-    if (!service.auth.canRead) {
+    if (!canRead) {
       setData(EMPTY_REFERENCE_DATA)
       return () => {
         active = false
       }
     }
 
-    void service.getReferenceData(year).then((value) => {
+    void getReferenceData(targetYear).then((value) => {
       if (active) {
         setData(value)
       }
@@ -54,7 +57,7 @@ export function useReferenceData(year?: number) {
     return () => {
       active = false
     }
-  }, [service, service.auth.canRead, service.currentYear, year])
+  }, [canRead, getReferenceData, targetYear])
 
   return data
 }

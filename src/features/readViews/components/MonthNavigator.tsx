@@ -1,4 +1,4 @@
-import { CONTROL_STYLE, formatMonthLabel } from '@/features/readViews/formatters'
+import { formatMonthLabel } from '@/features/readViews/formatters'
 
 export interface MonthNavigatorProps {
   year: number
@@ -7,6 +7,7 @@ export interface MonthNavigatorProps {
   canGoNext?: boolean
   previousLabel?: string
   nextLabel?: string
+  notice?: string
   onPrevious: () => void
   onNext: () => void
 }
@@ -18,40 +19,36 @@ export function MonthNavigator({
   canGoNext = true,
   previousLabel = '이전 달',
   nextLabel = '다음 달',
+  notice,
   onPrevious,
   onNext,
 }: MonthNavigatorProps) {
   return (
-    <nav
-      aria-label="월 이동"
-      className="month-navigator"
-      style={{ display: 'flex', gap: '12px', alignItems: 'center' }}
-    >
-      <button
-        type="button"
-        className="month-navigator__button month-navigator__button--previous"
-        onClick={onPrevious}
-        disabled={!canGoPrevious}
-        style={{ ...CONTROL_STYLE, flex: 1 }}
-      >
-        {previousLabel}
-      </button>
-      <strong
-        className="month-navigator__label"
-        aria-live="polite"
-        style={{ minWidth: '120px', textAlign: 'center' }}
-      >
-        {formatMonthLabel(year, month)}
-      </strong>
-      <button
-        type="button"
-        className="month-navigator__button month-navigator__button--next"
-        onClick={onNext}
-        disabled={!canGoNext}
-        style={{ ...CONTROL_STYLE, flex: 1 }}
-      >
-        {nextLabel}
-      </button>
-    </nav>
+    <div className="month-navigator-wrap">
+      <nav aria-label="월 이동" className="month-navigator">
+        <button
+          type="button"
+          className="icon-button icon-button--soft month-navigator__button"
+          onClick={onPrevious}
+          disabled={!canGoPrevious}
+          aria-label={previousLabel}
+        >
+          {'<'}
+        </button>
+        <strong className="month-navigator__label" aria-live="polite">
+          {formatMonthLabel(year, month)}
+        </strong>
+        <button
+          type="button"
+          className="icon-button icon-button--soft month-navigator__button"
+          onClick={onNext}
+          disabled={!canGoNext}
+          aria-label={nextLabel}
+        >
+          {'>'}
+        </button>
+      </nav>
+      {notice ? <p className="month-navigator__notice">{notice}</p> : null}
+    </div>
   )
 }

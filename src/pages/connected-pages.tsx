@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppService } from '@/app/use-app-service.ts'
 import type { MonthlyBudget } from '@/domain/budget.ts'
 import type { SettlementSummary } from '@/domain/settlement.ts'
@@ -6,6 +6,7 @@ import type { BudgetGroupView } from '@/features/budgets/types.ts'
 import type {
   EditableAccount,
   EditableCategory,
+  SettingsConfirmation,
 } from '@/features/settings/types.ts'
 import BudgetPage from '@/pages/BudgetPage.tsx'
 import EnergyPage from '@/pages/EnergyPage.tsx'
@@ -50,43 +51,87 @@ function PageNotice({
   )
 }
 
-function usePageMonth(): [YearMonth, (amount: number) => void] {
+interface PageMonthControl {
+  selection: YearMonth
+  shift: (amount: number) => void
+  canGoPrevious: boolean
+  canGoNext: boolean
+  notice?: string
+}
+
+function usePageMonth(): PageMonthControl {
   const service = useAppService()
   const [selection, setSelection] = useState<YearMonth>({
     year: service.currentYear,
     month: service.currentMonth,
   })
+  const [linkedYears, setLinkedYears] = useState<Set<number>>()
+  const getYearGraph = service.getYearGraph
+  const setCurrentYearMonth = service.setCurrentYearMonth
+
+  useEffect(() => {
+    let active = true
+    void getYearGraph()
+      .then((graph) => {
+        if (active) setLinkedYears(new Set(graph.years.keys()))
+      })
+      .catch(() => {
+        if (active) setLinkedYears(new Set([selection.year]))
+      })
+    return () => { active = false }
+  }, [getYearGraph, selection.year])
+
+  const previous = shiftYearMonth(selection, -1)
+  const next = shiftYearMonth(selection, 1)
+  const canMoveTo = (target: YearMonth) =>
+    target.year === selection.year || Boolean(linkedYears?.has(target.year))
+  const canGoPrevious = canMoveTo(previous)
+  const canGoNext = canMoveTo(next)
 
   const shift = (amount: number) => {
     setSelection((current) => {
       const next = shiftYearMonth(current, amount)
-      service.setCurrentYearMonth(next.year, next.month)
+      if (next.year !== current.year && !linkedYears?.has(next.year)) {
+        return current
+      }
+      setCurrentYearMonth(next.year, next.month)
       return next
     })
   }
 
-  return [selection, shift]
+  const notice = linkedYears && selection.month === 1 && !canGoPrevious
+    ? `${selection.year - 1}년 Sheet가 연결되지 않았습니다. 설정에서 연도를 연결하세요.`
+    : linkedYears && selection.month === 12 && !canGoNext
+      ? `${selection.year + 1}년 Sheet가 연결되지 않았습니다. 설정에서 연도를 연결하세요.`
+      : undefined
+
+  return { selection, shift, canGoPrevious, canGoNext, notice }
 }
 
 export function ConnectedBudgetPage() {
   const service = useAppService()
-  const [selection, shiftMonth] = usePageMonth()
+  const monthControl = usePageMonth()
+  const { selection } = monthControl
   const [groups, setGroups] = useState<BudgetGroupView[]>([])
   const [selectedGroupName, setSelectedGroupName] = useState('')
-  const [draft, setDraft] = useState({ groupName: '', amount: '', reason: '' })
+  const [draft, setDraft] = useState({ groupName: '', amount: '' })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [confirmAdjustment, setConfirmAdjustment] = useState(false)
   const [resetGroupName, setResetGroupName] = useState('')
+  const [isMutating, setIsMutating] = useState(false)
+  const getSettingsData = service.getSettingsData
+  const getBudgets = service.getBudgets
 
   const load = useCallback(async () => {
     setIsLoading(true)
     setError('')
+    setGroups([])
     try {
       const [settings, budgets] = await Promise.all([
-        service.getSettingsData(selection.year),
-        service.getBudgets(selection.year, selection.month),
+        getSettingsData(selection.year),
+        getBudgets(selection.year, selection.month),
       ])
       const budgetByName = new Map(
         budgets.map((budget) => [budget.groupName, budget]),
@@ -112,13 +157,17 @@ export function ConnectedBudgetPage() {
           }]
         })
       setGroups(nextGroups)
-      const nextSelected = nextGroups.some(
-        (group) => group.group.name === selectedGroupName,
-      )
-        ? selectedGroupName
-        : (nextGroups[0]?.group.name ?? '')
-      setSelectedGroupName(nextSelected)
-      setDraft((current) => ({ ...current, groupName: nextSelected }))
+      setSelectedGroupName((current) => {
+        const nextSelected = nextGroups.some((group) => group.group.name === current)
+          ? current
+          : (nextGroups[0]?.group.name ?? '')
+        const selected = nextGroups.find((group) => group.group.name === nextSelected)
+        setDraft({
+          groupName: nextSelected,
+          amount: selected ? String(selected.monthly.adjustment) : '',
+        })
+        return nextSelected
+      })
       setStatus(nextGroups.length ? '' : '표시할 예산 그룹이 없습니다.')
     } catch (loadError) {
       setGroups([])
@@ -130,7 +179,7 @@ export function ConnectedBudgetPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [selection.month, selection.year, selectedGroupName, service])
+  }, [getBudgets, getSettingsData, selection.month, selection.year])
 
   useEffect(() => {
     void load()
@@ -138,7 +187,7 @@ export function ConnectedBudgetPage() {
 
   const adjustmentAmount = Number(draft.amount.replaceAll(',', ''))
   const submitAdjustment = () => {
-    if (!draft.groupName || !Number.isFinite(adjustmentAmount)) {
+    if (!draft.groupName || !draft.amount.trim() || !Number.isFinite(adjustmentAmount)) {
       setError('예산 그룹과 조정 금액을 확인해주세요.')
       return
     }
@@ -148,6 +197,7 @@ export function ConnectedBudgetPage() {
   const applyAdjustment = async () => {
     setConfirmAdjustment(false)
     setError('')
+    setIsMutating(true)
     try {
       await service.updateBudget(
         selection.year,
@@ -155,14 +205,16 @@ export function ConnectedBudgetPage() {
         draft.groupName,
         adjustmentAmount,
       )
-      setStatus('예산 조정을 저장했습니다.')
       await load()
+      setStatus('예산 조정을 저장했습니다.')
     } catch (saveError) {
       setError(
         saveError instanceof Error
           ? saveError.message
           : '예산 조정을 저장하지 못했습니다.',
       )
+    } finally {
+      setIsMutating(false)
     }
   }
 
@@ -170,22 +222,25 @@ export function ConnectedBudgetPage() {
     const groupName = resetGroupName
     setResetGroupName('')
     setError('')
+    setIsMutating(true)
     try {
       await service.resetBudget(selection.year, selection.month, groupName)
-      setStatus('현재 이월금을 수동조정으로 초기화했습니다.')
       await load()
+      setStatus('현재 이월금을 수동조정으로 초기화했습니다.')
     } catch (resetError) {
       setError(
         resetError instanceof Error
           ? resetError.message
           : '이월금을 초기화하지 못했습니다.',
       )
+    } finally {
+      setIsMutating(false)
     }
   }
 
   return (
     <>
-      <PageNotice busy={isLoading} error={error} status={status} />
+      <PageNotice busy={isLoading || isMutating} error={error} status={status} />
       <BudgetPage
         year={selection.year}
         month={selection.month}
@@ -193,11 +248,15 @@ export function ConnectedBudgetPage() {
         selectedGroupName={selectedGroupName}
         adjustmentDraft={draft}
         adjustmentError={error}
+        isBusy={isLoading || isMutating}
+        canWrite={service.hasWriteAccess}
+        monthNotice={monthControl.notice}
         adjustmentConfirmation={confirmAdjustment ? {
           open: true,
           title: '예산 조정을 적용할까요?',
           description: `${draft.groupName}의 이번 달 조정을 ${adjustmentAmount.toLocaleString('ko-KR')}원으로 저장합니다.`,
           confirmLabel: '적용',
+          busy: isMutating,
           onConfirm: () => { void applyAdjustment() },
           onCancel: () => setConfirmAdjustment(false),
         } : undefined}
@@ -206,14 +265,22 @@ export function ConnectedBudgetPage() {
           title: '이월금을 초기화할까요?',
           description: '현재 이월금만큼 반대 방향 수동조정을 기록합니다. 기준 월예산은 바뀌지 않습니다.',
           confirmLabel: '초기화',
+          busy: isMutating,
+          tone: 'danger',
           onConfirm: () => { void resetCarryOver() },
           onCancel: () => setResetGroupName(''),
         } : undefined}
-        onPreviousMonth={() => shiftMonth(-1)}
-        onNextMonth={() => shiftMonth(1)}
+        canGoPrevious={monthControl.canGoPrevious && !isLoading && !isMutating}
+        canGoNext={monthControl.canGoNext && !isLoading && !isMutating}
+        onPreviousMonth={() => monthControl.shift(-1)}
+        onNextMonth={() => monthControl.shift(1)}
         onSelectGroup={(groupName) => {
           setSelectedGroupName(groupName)
-          setDraft((current) => ({ ...current, groupName }))
+          const selected = groups.find((group) => group.group.name === groupName)
+          setDraft({
+            groupName,
+            amount: selected ? String(selected.monthly.adjustment) : '',
+          })
         }}
         onAdjustmentDraftChange={setDraft}
         onSubmitAdjustment={submitAdjustment}
@@ -233,19 +300,28 @@ const EMPTY_SETTLEMENT: SettlementSummary = {
 
 export function ConnectedSettlementPage() {
   const service = useAppService()
-  const [selection, shiftMonth] = usePageMonth()
+  const monthControl = usePageMonth()
+  const { selection } = monthControl
   const [summary, setSummary] = useState(EMPTY_SETTLEMENT)
   const [budgets, setBudgets] = useState<MonthlyBudget[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const getSettlement = service.getSettlement
+  const getBudgets = service.getBudgets
 
   useEffect(() => {
     let active = true
     setIsLoading(true)
     setError('')
+    setSummary({
+      ...EMPTY_SETTLEMENT,
+      year: selection.year,
+      month: selection.month,
+    })
+    setBudgets([])
     void Promise.all([
-      service.getSettlement(selection.year, selection.month),
-      service.getBudgets(selection.year, selection.month),
+      getSettlement(selection.year, selection.month),
+      getBudgets(selection.year, selection.month),
     ])
       .then(([nextSummary, nextBudgets]) => {
         if (active) {
@@ -271,7 +347,7 @@ export function ConnectedSettlementPage() {
     return () => {
       active = false
     }
-  }, [selection.month, selection.year, service])
+  }, [getBudgets, getSettlement, selection.month, selection.year])
 
   return (
     <>
@@ -284,8 +360,11 @@ export function ConnectedSettlementPage() {
           spent: budget.spent,
           remaining: budget.remaining,
         }))}
-        onPreviousMonth={() => shiftMonth(-1)}
-        onNextMonth={() => shiftMonth(1)}
+        canGoPrevious={monthControl.canGoPrevious && !isLoading}
+        canGoNext={monthControl.canGoNext && !isLoading}
+        monthNotice={monthControl.notice}
+        onPreviousMonth={() => monthControl.shift(-1)}
+        onNextMonth={() => monthControl.shift(1)}
       />
     </>
   )
@@ -293,16 +372,18 @@ export function ConnectedSettlementPage() {
 
 export function ConnectedInvestmentPage() {
   const service = useAppService()
-  const [selection, shiftMonth] = usePageMonth()
+  const selection = { year: service.currentYear, month: service.currentMonth }
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof service.getInvestment>>>()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const getInvestment = service.getInvestment
 
   useEffect(() => {
     let active = true
     setIsLoading(true)
     setError('')
-    void service.getInvestment(selection.year, selection.month)
+    setSummary(undefined)
+    void getInvestment(selection.year, selection.month)
       .then((nextSummary) => {
         if (active) setSummary(nextSummary)
       })
@@ -315,7 +396,7 @@ export function ConnectedInvestmentPage() {
         if (active) setIsLoading(false)
       })
     return () => { active = false }
-  }, [selection.month, selection.year, service])
+  }, [getInvestment, selection.month, selection.year])
 
   return (
     <>
@@ -324,8 +405,6 @@ export function ConnectedInvestmentPage() {
         {...selection}
         summary={summary}
         formatError={error}
-        onPreviousMonth={() => shiftMonth(-1)}
-        onNextMonth={() => shiftMonth(1)}
       />
     </>
   )
@@ -333,16 +412,18 @@ export function ConnectedInvestmentPage() {
 
 export function ConnectedEnergyPage() {
   const service = useAppService()
-  const [selection, shiftMonth] = usePageMonth()
+  const selection = { year: service.currentYear, month: service.currentMonth }
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof service.getEnergy>>>()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const getEnergy = service.getEnergy
 
   useEffect(() => {
     let active = true
     setIsLoading(true)
     setError('')
-    void service.getEnergy(selection.year, selection.month)
+    setSummary(undefined)
+    void getEnergy(selection.year, selection.month)
       .then((nextSummary) => {
         if (active) setSummary(nextSummary)
       })
@@ -355,7 +436,7 @@ export function ConnectedEnergyPage() {
         if (active) setIsLoading(false)
       })
     return () => { active = false }
-  }, [selection.month, selection.year, service])
+  }, [getEnergy, selection.month, selection.year])
 
   return (
     <>
@@ -364,8 +445,6 @@ export function ConnectedEnergyPage() {
         {...selection}
         summary={summary}
         formatError={error}
-        onPreviousMonth={() => shiftMonth(-1)}
-        onNextMonth={() => shiftMonth(1)}
       />
     </>
   )
@@ -376,6 +455,7 @@ export function ConnectedSettingsPage() {
   const year = service.currentYear
   const [accounts, setAccounts] = useState<EditableAccount[]>([])
   const [categories, setCategories] = useState<EditableCategory[]>([])
+  const [budgetGroups, setBudgetGroups] = useState<string[]>([])
   const [yearLinks, setYearLinks] = useState<Array<{
     year: number
     spreadsheetId: string
@@ -384,95 +464,139 @@ export function ConnectedSettingsPage() {
   }>>([])
   const [newAccountName, setNewAccountName] = useState('')
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryBudgetGroup, setNewCategoryBudgetGroup] = useState('')
   const [yearLinkDraft, setYearLinkDraft] = useState({ year: '', spreadsheetUrl: '' })
-  const [syncConfirmationOpen, setSyncConfirmationOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<{
+    title: string
+    description: string
+    confirmLabel: string
+    tone?: SettingsConfirmation['tone']
+    run: () => Promise<unknown>
+    successMessage: string
+  } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isMutating, setIsMutating] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
+  const mutationRef = useRef(false)
+  const getSettingsData = service.getSettingsData
 
   const load = useCallback(async () => {
     setIsLoading(true)
     setError('')
     try {
-      const data = await service.getSettingsData(year)
+      const data = await getSettingsData(year)
       setAccounts(data.accounts.map((account) => ({ ...account, draftName: account.name })))
       setCategories(data.categories.map((category) => ({ ...category, draftName: category.name })))
+      setBudgetGroups(
+        data.budgetGroups
+          .filter((group) => group.active)
+          .sort((left, right) => left.order - right.order)
+          .map((group) => group.name),
+      )
       setYearLinks(data.linkedYears.map((linkedYear) => ({
         ...linkedYear,
         spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${linkedYear.spreadsheetId}/edit`,
       })))
+      return true
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '설정을 불러오지 못했습니다.')
+      return false
     } finally {
       setIsLoading(false)
     }
-  }, [service, year])
+  }, [getSettingsData, year])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  const runMutation = async (action: () => Promise<unknown>, successMessage: string) => {
+  const runMutation = async (
+    action: () => Promise<unknown>,
+    successMessage: string,
+  ): Promise<boolean> => {
+    if (mutationRef.current) return false
+    mutationRef.current = true
+    setIsMutating(true)
     setError('')
     setStatus('')
     try {
       await action()
+      const refreshed = await load()
+      if (!refreshed) return false
       setStatus(successMessage)
-      await load()
+      return true
     } catch (mutationError) {
       setError(mutationError instanceof Error ? mutationError.message : '설정을 저장하지 못했습니다.')
+      return false
+    } finally {
+      mutationRef.current = false
+      setIsMutating(false)
     }
   }
 
   const renameAccount = (accountName: string) => {
     const draftName = accounts.find((account) => account.name === accountName)?.draftName.trim()
     if (!draftName || draftName === accountName) return
-    if (!window.confirm(`${accountName}을(를) ${draftName}(으)로 바꾸고 현재 연도 1~12월 거래에도 반영할까요?`)) return
-    void runMutation(
-      () => service.renameAccount(year, accountName, draftName),
-      '통장 이름을 변경했습니다.',
-    )
+    setPendingAction({
+      title: '통장 이름을 변경할까요?',
+      description: `통장 이름을 “${accountName}” → “${draftName}”로 바꾸고 ${year}년 1~12월 거래에도 반영합니다.`,
+      confirmLabel: '이름 변경',
+      run: () => service.renameAccount(year, accountName, draftName),
+      successMessage: '통장 이름을 변경했습니다.',
+    })
   }
 
   const renameCategory = (categoryName: string) => {
     const draftName = categories.find((category) => category.name === categoryName)?.draftName.trim()
     if (!draftName || draftName === categoryName) return
-    if (!window.confirm(`${categoryName}을(를) ${draftName}(으)로 바꾸고 현재 연도 1~12월 거래에도 반영할까요?`)) return
-    void runMutation(
-      () => service.renameCategory(year, categoryName, draftName),
-      '카테고리 이름을 변경했습니다.',
-    )
+    setPendingAction({
+      title: '카테고리 이름을 변경할까요?',
+      description: `카테고리 이름을 “${categoryName}” → “${draftName}”로 바꾸고 ${year}년 1~12월 거래에도 반영합니다.`,
+      confirmLabel: '이름 변경',
+      run: () => service.renameCategory(year, categoryName, draftName),
+      successMessage: '카테고리 이름을 변경했습니다.',
+    })
   }
 
   const connectedYearNumbers = useMemo(
     () => new Set(yearLinks.map((item) => item.year)),
     [yearLinks],
   )
+  const isBusy = isLoading || isMutating
+  const canSyncMonthZero = connectedYearNumbers.has(year - 1)
 
   return (
     <>
-      <PageNotice busy={isLoading} error={error} status={status} />
+      <PageNotice busy={isBusy} error={error} status={status} />
       <SettingsPage
         newAccountName={newAccountName}
         newCategoryName={newCategoryName}
+        newCategoryBudgetGroup={newCategoryBudgetGroup}
+        budgetGroups={budgetGroups}
         accounts={accounts}
         categories={categories}
         yearLinks={yearLinks}
         yearLinkDraft={yearLinkDraft}
-        syncConfirmation={syncConfirmationOpen ? {
+        confirmation={pendingAction ? {
           open: true,
-          title: `${year}년 0월 데이터를 업데이트할까요?`,
-          description: `${year - 1}년 12월 데이터를 다시 가져옵니다. ${year}년 통장 잔액 및 예산 계산 결과가 변경될 수 있습니다.`,
-          confirmLabel: '업데이트',
+          title: pendingAction.title,
+          description: pendingAction.description,
+          confirmLabel: pendingAction.confirmLabel,
+          tone: pendingAction.tone,
           onConfirm: () => {
-            setSyncConfirmationOpen(false)
+            const action = pendingAction
+            setPendingAction(null)
             void runMutation(
-              () => service.syncMonthZero(year),
-              '0월 Snapshot을 업데이트했습니다.',
+              action.run,
+              action.successMessage,
             )
           },
-          onCancel: () => setSyncConfirmationOpen(false),
+          onCancel: () => setPendingAction(null),
         } : undefined}
+        isBusy={isBusy}
+        canWrite={service.hasWriteAccess}
+        canSyncMonthZero={canSyncMonthZero}
         onNewAccountNameChange={setNewAccountName}
         onAccountDraftNameChange={(accountName, draftName) => {
           setAccounts((current) => current.map((account) =>
@@ -485,17 +609,24 @@ export function ConnectedSettingsPage() {
           void runMutation(
             () => service.createAccount(year, { name }),
             '통장을 추가했습니다.',
-          ).then(() => setNewAccountName(''))
+          ).then((saved) => {
+            if (saved) setNewAccountName('')
+          })
         }}
         onAccountDisableToggle={(accountName, active) => {
-          if (active || !window.confirm(`${accountName}을(를) 신규 거래 목록에서 숨길까요? 기존 거래는 유지됩니다.`)) return
-          void runMutation(
-            () => service.disableAccount(year, accountName),
-            '통장을 사용중지했습니다.',
-          )
+          if (active) return
+          setPendingAction({
+            title: '통장을 사용중지할까요?',
+            description: `“${accountName}” 통장을 신규 거래 목록에서 숨깁니다. 기존 거래는 그대로 유지됩니다.`,
+            confirmLabel: '사용중지',
+            tone: 'danger',
+            run: () => service.disableAccount(year, accountName),
+            successMessage: '통장을 사용중지했습니다.',
+          })
         }}
         onAccountRename={renameAccount}
         onNewCategoryNameChange={setNewCategoryName}
+        onNewCategoryBudgetGroupChange={setNewCategoryBudgetGroup}
         onCategoryDraftNameChange={(categoryName, draftName) => {
           setCategories((current) => current.map((category) =>
             category.name === categoryName ? { ...category, draftName } : category,
@@ -505,16 +636,28 @@ export function ConnectedSettingsPage() {
           const name = newCategoryName.trim()
           if (!name) return
           void runMutation(
-            () => service.createCategory(year, { name }),
+            () => service.createCategory(year, {
+              name,
+              budgetGroup: newCategoryBudgetGroup || undefined,
+            }),
             '카테고리를 추가했습니다.',
-          ).then(() => setNewCategoryName(''))
+          ).then((saved) => {
+            if (saved) {
+              setNewCategoryName('')
+              setNewCategoryBudgetGroup('')
+            }
+          })
         }}
         onCategoryDisableToggle={(categoryName, active) => {
-          if (active || !window.confirm(`${categoryName}을(를) 신규 거래 목록에서 숨길까요? 기존 거래는 유지됩니다.`)) return
-          void runMutation(
-            () => service.disableCategory(year, categoryName),
-            '카테고리를 사용중지했습니다.',
-          )
+          if (active) return
+          setPendingAction({
+            title: '카테고리를 사용중지할까요?',
+            description: `“${categoryName}” 카테고리를 신규 거래 목록에서 숨깁니다. 기존 거래는 그대로 유지됩니다.`,
+            confirmLabel: '사용중지',
+            tone: 'danger',
+            run: () => service.disableCategory(year, categoryName),
+            successMessage: '카테고리를 사용중지했습니다.',
+          })
         }}
         onCategoryRename={renameCategory}
         onYearLinkDraftChange={setYearLinkDraft}
@@ -534,11 +677,33 @@ export function ConnectedSettingsPage() {
               spreadsheetUrl: yearLinkDraft.spreadsheetUrl.trim(),
             }),
             '연도별 Sheet를 연결했습니다.',
-          ).then(() => setYearLinkDraft({ year: '', spreadsheetUrl: '' }))
+          ).then((saved) => {
+            if (saved) setYearLinkDraft({ year: '', spreadsheetUrl: '' })
+          })
         }}
-        onRequestMonthZeroSync={() => setSyncConfirmationOpen(true)}
+        onRequestMonthZeroSync={() => setPendingAction({
+          title: `${year}년 0월 데이터를 업데이트할까요?`,
+          description: `${year - 1}년 12월 데이터를 다시 가져옵니다. ${year}년 통장 잔액 및 예산 계산 결과가 변경될 수 있습니다.`,
+          confirmLabel: '업데이트',
+          tone: 'danger',
+          run: () => service.syncMonthZero(year),
+          successMessage: '0월 Snapshot을 업데이트했습니다.',
+        })}
         onOpenSheet={(targetYear) => service.openGoogleSheet(targetYear)}
-        onLogout={() => { void service.logout() }}
+        onLogout={() => {
+          if (mutationRef.current) return
+          mutationRef.current = true
+          setIsMutating(true)
+          setError('')
+          void service.logout()
+            .catch((logoutError: unknown) => {
+              setError(logoutError instanceof Error ? logoutError.message : '로그아웃하지 못했습니다.')
+            })
+            .finally(() => {
+              mutationRef.current = false
+              setIsMutating(false)
+            })
+        }}
       />
     </>
   )

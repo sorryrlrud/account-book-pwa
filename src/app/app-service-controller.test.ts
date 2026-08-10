@@ -18,6 +18,17 @@ afterEach(() => {
 })
 
 describe('AppServiceController session restore', () => {
+  it('treats session restoration as a no-op when app settings are missing', async () => {
+    const controller = new AppServiceController({
+      envSource: {} as ImportMetaEnv,
+      windowRef: window,
+      tokenStorage: window.sessionStorage,
+    })
+
+    await expect(controller.resumeSession()).resolves.toBeUndefined()
+    expect(controller.getSnapshot().auth.status).toBe('unconfigured')
+  })
+
   it('bootstraps a valid stored session without opening Google login', async () => {
     window.sessionStorage.setItem(storageKey, JSON.stringify({
       accessToken: 'stored-token',

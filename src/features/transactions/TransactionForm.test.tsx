@@ -33,6 +33,52 @@ function renderForm(
 }
 
 describe('TransactionForm', () => {
+  it('retains inactive account and category values while editing an existing transaction', () => {
+    const { container } = renderForm({
+      accounts: ['Active account'],
+      categories: ['Active category'],
+      initialTransaction: {
+        id: 'legacy-row',
+        type: 'expense',
+        date: '2026-08-08',
+        amount: -48_000,
+        description: 'Legacy charge',
+        account: 'Inactive account',
+        category: 'Inactive category',
+        sourceYear: 2026,
+        sourceMonth: 8,
+      },
+    })
+
+    const [accountSelect, categorySelect] = container.querySelectorAll('select')
+    expect(accountSelect).toHaveValue('Inactive account')
+    expect(categorySelect).toHaveValue('Inactive category')
+    expect(screen.getByRole('option', { name: 'Inactive account (사용중지)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Inactive category (사용중지)' })).toBeInTheDocument()
+  })
+
+  it('requires an explicit type choice before saving an unknown legacy transaction', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      initialTransaction: {
+        type: 'unknown',
+        date: '2026-08-08',
+        amount: 48_000,
+        description: 'Unclassified legacy row',
+        account: 'Checking',
+        sourceYear: 2026,
+        sourceMonth: 8,
+      },
+    })
+
+    expect(screen.getByText(/유형을 판단할 수 없습니다/)).toBeVisible()
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled()
+    expect(screen.getByRole('tab', { name: '지출' })).toHaveAttribute('aria-selected', 'false')
+
+    await user.click(screen.getByRole('tab', { name: '수입' }))
+    expect(screen.getByRole('tab', { name: '수입' })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('keeps the save button disabled until required create fields are valid', async () => {
     const user = userEvent.setup()
     const { onSubmit, container } = renderForm()

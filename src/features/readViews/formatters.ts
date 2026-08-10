@@ -2,10 +2,6 @@ const currencyFormatter = new Intl.NumberFormat('ko-KR', {
   maximumFractionDigits: 0,
 })
 
-export const CONTROL_STYLE = {
-  minHeight: '44px',
-}
-
 export function formatMonthLabel(year: number, month: number): string {
   return `${year}년 ${month}월`
 }

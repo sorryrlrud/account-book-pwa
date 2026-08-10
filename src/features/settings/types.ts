@@ -17,12 +17,13 @@ export interface SettingsYearLinkDraft {
   spreadsheetUrl: string
 }
 
-export interface SyncConfirmation {
+export interface SettingsConfirmation {
   open: boolean
   title: string
   description: string
   confirmLabel: string
   cancelLabel?: string
+  tone?: 'default' | 'danger'
   onConfirm: () => void
   onCancel: () => void
 }

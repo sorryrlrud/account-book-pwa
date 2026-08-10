@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type HistoryFilters } from '@/app/app-service-core.ts'
 import { useAppService, useReferenceData } from '@/app/use-app-service.ts'
 import { currentMonthValue, formatDateHeading, formatMonthLabel, shiftMonth } from '@/features/transactions/date.ts'
@@ -15,6 +15,8 @@ const DEFAULT_FILTERS: HistoryFilters = {
   category: '',
 }
 
+const DEFAULT_YEAR = Number(DEFAULT_FILTERS.month.slice(0, 4))
+
 export function HistoryPage() {
   const service = useAppService()
   const { accounts, categories } = useReferenceData()
@@ -27,30 +29,58 @@ export function HistoryPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null)
+  const [linkedYears, setLinkedYears] = useState<Set<number>>()
+  const loadRequestRef = useRef(0)
+  const listTransactions = service.listTransactions
+  const getYearGraph = service.getYearGraph
+
+  useEffect(() => {
+    let active = true
+    void getYearGraph()
+      .then((graph) => {
+        if (active) setLinkedYears(new Set(graph.years.keys()))
+      })
+      .catch(() => {
+        if (active) setLinkedYears(new Set([DEFAULT_YEAR]))
+      })
+    return () => { active = false }
+  }, [getYearGraph])
 
   const loadTransactions = useCallback(async (nextFilters: HistoryFilters) => {
+    const requestId = loadRequestRef.current + 1
+    loadRequestRef.current = requestId
     setIsLoading(true)
     setErrorMessage('')
     setStatusMessage('내역을 불러오는 중입니다.')
+    setTransactions([])
 
     try {
-      const result = await service.listTransactions(nextFilters)
+      const result = await listTransactions(nextFilters)
+      if (loadRequestRef.current !== requestId) return
       setTransactions(result)
       setStatusMessage(result.length ? '내역을 불러왔습니다.' : '표시할 내역이 없습니다.')
     } catch (error) {
+      if (loadRequestRef.current !== requestId) return
       setTransactions([])
       setStatusMessage('')
       setErrorMessage(
         error instanceof Error ? error.message : '내역을 불러오지 못했습니다.',
       )
     } finally {
-      setIsLoading(false)
+      if (loadRequestRef.current === requestId) {
+        setIsLoading(false)
+      }
     }
-  }, [service])
+  }, [listTransactions])
 
   useEffect(() => {
-    void loadTransactions(filters)
-  }, [filters, loadTransactions])
+    void loadTransactions({
+      ...DEFAULT_FILTERS,
+      month: filters.month,
+    })
+    setEditing(null)
+    setPendingDelete(null)
+  }, [filters.month, loadTransactions])
 
   const filteredTransactions = useMemo(() => {
     const query = filters.search.trim().toLowerCase()
@@ -60,7 +90,11 @@ export function HistoryPage() {
         return false
       }
 
-      if (filters.account && transaction.account !== filters.account) {
+      if (
+        filters.account &&
+        transaction.account !== filters.account &&
+        transaction.destinationAccount !== filters.account
+      ) {
         return false
       }
 
@@ -72,12 +106,22 @@ export function HistoryPage() {
         return true
       }
 
-      return transaction.description.toLowerCase().includes(query)
+      return [
+        transaction.description,
+        transaction.account,
+        transaction.destinationAccount,
+        transaction.category,
+      ].some((value) => value?.toLowerCase().includes(query))
     })
   }, [filters.account, filters.category, filters.search, filters.type, transactions])
 
   const groupedTransactions = useMemo(() => {
-    return filteredTransactions.reduce<Record<string, Transaction[]>>(
+    return [...filteredTransactions]
+      .sort((left, right) => {
+        const byDate = right.date.localeCompare(left.date)
+        return byDate || (right.sourceRow ?? 0) - (left.sourceRow ?? 0)
+      })
+      .reduce<Record<string, Transaction[]>>(
       (groups, transaction) => {
         const key = transaction.date
         if (!groups[key]) {
@@ -93,6 +137,30 @@ export function HistoryPage() {
   const handleRefresh = () => {
     void loadTransactions(filters)
   }
+
+  const moveMonth = (step: number) => {
+    const nextMonth = shiftMonth(filters.month, step)
+    const currentYear = Number(filters.month.slice(0, 4))
+    const nextYear = Number(nextMonth.slice(0, 4))
+    if (nextYear !== currentYear && !linkedYears?.has(nextYear)) {
+      setStatusMessage(`${nextYear}년 Sheet가 연결되지 않았습니다. 설정에서 연도를 연결하세요.`)
+      return
+    }
+    setFilters((current) => ({ ...current, month: nextMonth }))
+  }
+
+  const previousMonth = shiftMonth(filters.month, -1)
+  const nextMonth = shiftMonth(filters.month, 1)
+  const selectedYear = Number(filters.month.slice(0, 4))
+  const previousYear = Number(previousMonth.slice(0, 4))
+  const nextYear = Number(nextMonth.slice(0, 4))
+  const canGoPrevious = previousYear === selectedYear || Boolean(linkedYears?.has(previousYear))
+  const canGoNext = nextYear === selectedYear || Boolean(linkedYears?.has(nextYear))
+  const boundaryNotice = linkedYears && !canGoPrevious
+    ? `${previousYear}년 Sheet가 연결되지 않았습니다. 설정에서 연도를 연결하세요.`
+    : linkedYears && !canGoNext
+      ? `${nextYear}년 Sheet가 연결되지 않았습니다. 설정에서 연도를 연결하세요.`
+      : ''
 
   const handleUpdate = async (payload: TransactionFormSubmitPayload) => {
     if (!payload.transaction) {
@@ -170,13 +238,8 @@ export function HistoryPage() {
           <button
             type="button"
             className="icon-button icon-button--soft"
-            onClick={() =>
-              setFilters((current) => ({
-                ...current,
-                month: shiftMonth(current.month, -1),
-              }))
-            }
-            disabled={isLoading}
+            onClick={() => moveMonth(-1)}
+            disabled={isLoading || !canGoPrevious}
             aria-label="이전 달"
           >
             {'<'}
@@ -184,26 +247,30 @@ export function HistoryPage() {
           <input
             type="month"
             value={filters.month}
-            onChange={(event) =>
-              setFilters((current) => ({ ...current, month: event.target.value }))
-            }
+            onChange={(event) => {
+              const value = event.target.value
+              const year = Number(value.slice(0, 4))
+              if (linkedYears && !linkedYears.has(year)) {
+                setStatusMessage(`${year}년 Sheet가 연결되지 않았습니다. 설정에서 연도를 연결하세요.`)
+                return
+              }
+              setFilters((current) => ({ ...current, month: value }))
+            }}
             aria-label="조회 월"
+            disabled={isLoading}
           />
           <button
             type="button"
             className="icon-button icon-button--soft"
-            onClick={() =>
-              setFilters((current) => ({
-                ...current,
-                month: shiftMonth(current.month, 1),
-              }))
-            }
-            disabled={isLoading}
+            onClick={() => moveMonth(1)}
+            disabled={isLoading || !canGoNext}
             aria-label="다음 달"
           >
             {'>'}
           </button>
         </div>
+
+        {boundaryNotice ? <p className="month-navigator__notice">{boundaryNotice}</p> : null}
 
         <div className="compact-filters">
           <label className="field">
@@ -282,8 +349,8 @@ export function HistoryPage() {
             isBusy={isSaving}
             isWriteEnabled={service.hasWriteAccess}
             submitLabel="변경사항 저장"
-            errorMessage={errorMessage}
-            statusMessage={statusMessage}
+            errorMessage=""
+            statusMessage=""
             initialTransaction={editing}
             onSubmit={handleUpdate}
             onCancel={() => setEditing(null)}
@@ -348,10 +415,10 @@ export function HistoryPage() {
               <section key={date} className="history-group">
                 <h3>{formatDateHeading(date)}</h3>
                 <div className="history-list">
-                  {items.map((transaction) => (
+                  {items.map((transaction, index) => (
                     <button
                       type="button"
-                      key={transaction.id ?? `${date}-${transaction.description}-${transaction.amount}`}
+                      key={transaction.id ?? `${date}-${transaction.sourceRow ?? index}-${transaction.description}-${transaction.amount}`}
                       className="history-item history-item--button"
                       onClick={() => setEditing(transaction)}
                     >

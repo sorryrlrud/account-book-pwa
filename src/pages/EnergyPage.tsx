@@ -1,55 +1,36 @@
 import type { EnergySummary } from '@/domain'
 import { MetricRows } from '@/features/readViews/components/MetricRows'
-import { MonthNavigator } from '@/features/readViews/components/MonthNavigator'
 import { SummaryCard } from '@/features/readViews/components/SummaryCard'
-import { formatMonthLabel } from '@/features/readViews/formatters'
 
 export interface EnergyPageProps {
   year: number
-  month: number
-  canGoPrevious?: boolean
-  canGoNext?: boolean
   summary?: EnergySummary
   formatError?: string
-  onPreviousMonth: () => void
-  onNextMonth: () => void
 }
 
 export default function EnergyPage({
   year,
-  month,
-  canGoPrevious = true,
-  canGoNext = true,
   summary,
   formatError,
-  onPreviousMonth,
-  onNextMonth,
 }: EnergyPageProps) {
   return (
-    <section className="energy-page" style={{ display: 'grid', gap: '16px' }}>
-      <header className="energy-page__header" style={{ display: 'grid', gap: '12px' }}>
+    <section className="read-page energy-page">
+      <header className="read-page__header energy-page__header">
         <div>
-          <p className="energy-page__eyebrow" style={{ margin: 0 }}>
+          <p className="read-page__eyebrow energy-page__eyebrow">
             에너지
           </p>
-          <h1 className="energy-page__title" style={{ margin: '8px 0 0' }}>
-            {formatMonthLabel(year, month)} 에너지 사용량
-          </h1>
+          <h2 className="read-page__title energy-page__title">
+            {year}년 에너지 현황
+          </h2>
+          <p className="read-page__description">에너지 탭에 정리된 현재 요약을 조회합니다.</p>
         </div>
-        <MonthNavigator
-          year={year}
-          month={month}
-          canGoPrevious={canGoPrevious}
-          canGoNext={canGoNext}
-          onPrevious={onPreviousMonth}
-          onNext={onNextMonth}
-        />
       </header>
 
       {formatError ? (
-        <section className="energy-page__error" role="alert" style={{ border: '1px solid #b91c1c', borderRadius: '16px', padding: '16px' }}>
-          <h2 style={{ marginTop: 0 }}>형식 오류</h2>
-          <p style={{ marginBottom: 0 }}>{formatError}</p>
+        <section className="form-error read-page__error" role="alert">
+          <h3>형식 오류</h3>
+          <p>{formatError}</p>
         </section>
       ) : null}
 
@@ -64,7 +45,7 @@ export default function EnergyPage({
 
       {summary?.warnings?.length ? (
         <SummaryCard title="확인 필요">
-          <ul className="energy-page__warnings" style={{ margin: 0, paddingLeft: '20px' }}>
+          <ul className="read-page__warnings energy-page__warnings">
             {summary.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}

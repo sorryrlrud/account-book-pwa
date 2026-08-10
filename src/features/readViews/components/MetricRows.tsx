@@ -29,17 +29,16 @@ export function MetricRows({
   }
 
   return (
-    <dl className="metric-rows" style={{ margin: 0, display: 'grid', gap: '10px' }}>
+    <dl className="metric-rows">
       {items.map((item) => (
         <div
           key={`${item.label}-${item.value}`}
           className="metric-rows__item"
-          style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}
         >
           <dt className="metric-rows__label">{item.label}</dt>
           <dd
             className="metric-rows__value"
-            style={{ margin: 0, color: toneStyles[item.tone ?? 'default'] }}
+            style={{ color: toneStyles[item.tone ?? 'default'] }}
           >
             {item.value}
           </dd>

@@ -28,8 +28,7 @@ export function AppServiceProvider({ children }: { children: ReactNode }) {
     controller.getSnapshot.bind(controller),
   )
 
-  const service = useMemo<AppService>(() => ({
-    ...snapshot,
+  const actions = useMemo<Omit<AppService, keyof typeof snapshot>>(() => ({
     login: () => controller.login(),
     relogin: () => controller.relogin(),
     logout: () => controller.logout(),
@@ -62,7 +61,12 @@ export function AppServiceProvider({ children }: { children: ReactNode }) {
     getInvestment: (year, month) => controller.getInvestment(year, month),
     getEnergy: (year, month) => controller.getEnergy(year, month),
     openGoogleSheet: (year) => controller.openGoogleSheet(year),
-  }), [controller, snapshot])
+  }), [controller])
+
+  const service = useMemo<AppService>(() => ({
+    ...snapshot,
+    ...actions,
+  }), [actions, snapshot])
 
   return (
     <AppServiceContext.Provider value={service}>

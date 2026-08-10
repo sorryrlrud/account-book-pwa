@@ -14,7 +14,6 @@ export interface BudgetGroupView extends BudgetSummary {
 export interface BudgetAdjustmentDraft {
   groupName: string
   amount: string
-  reason: string
 }
 
 export interface BudgetAdjustmentConfirmation {
@@ -23,6 +22,8 @@ export interface BudgetAdjustmentConfirmation {
   description: string
   confirmLabel: string
   cancelLabel?: string
+  busy?: boolean
+  tone?: 'default' | 'danger'
   onConfirm: () => void
   onCancel: () => void
 }

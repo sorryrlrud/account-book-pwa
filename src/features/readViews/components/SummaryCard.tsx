@@ -8,16 +8,13 @@ export interface SummaryCardProps {
 
 export function SummaryCard({ title, description, children }: SummaryCardProps) {
   return (
-    <section
-      className="summary-card"
-      style={{ border: '1px solid currentColor', borderRadius: '16px', padding: '16px' }}
-    >
-      <header className="summary-card__header" style={{ marginBottom: '12px' }}>
-        <h2 className="summary-card__title" style={{ margin: 0 }}>
+    <section className="panel summary-card">
+      <header className="summary-card__header">
+        <h2 className="summary-card__title">
           {title}
         </h2>
         {description ? (
-          <p className="summary-card__description" style={{ margin: '8px 0 0' }}>
+          <p className="summary-card__description">
             {description}
           </p>
         ) : null}

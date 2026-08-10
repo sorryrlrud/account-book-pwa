@@ -16,6 +16,9 @@ export interface SettlementPageProps {
   budgets: SettlementBudgetItem[]
   onPreviousMonth: () => void
   onNextMonth: () => void
+  canGoPrevious?: boolean
+  canGoNext?: boolean
+  monthNotice?: string
 }
 
 export default function SettlementPage({
@@ -23,21 +26,27 @@ export default function SettlementPage({
   budgets,
   onPreviousMonth,
   onNextMonth,
+  canGoPrevious = true,
+  canGoNext = true,
+  monthNotice,
 }: SettlementPageProps) {
   return (
-    <section className="settlement-page" style={{ display: 'grid', gap: '16px' }}>
-      <header className="settlement-page__header">
-        <p className="settlement-page__eyebrow" style={{ margin: 0 }}>
+    <section className="read-page settlement-page">
+      <header className="read-page__header settlement-page__header">
+        <p className="read-page__eyebrow settlement-page__eyebrow">
           정산
         </p>
-        <h1 className="settlement-page__title" style={{ margin: '8px 0 0' }}>
+        <h2 className="read-page__title settlement-page__title">
           {formatMonthLabel(summary.year, summary.month)} 정산 요약
-        </h1>
+        </h2>
         <MonthNavigator
           year={summary.year}
           month={summary.month}
           onPrevious={onPreviousMonth}
           onNext={onNextMonth}
+          canGoPrevious={canGoPrevious}
+          canGoNext={canGoNext}
+          notice={monthNotice}
         />
       </header>
 
