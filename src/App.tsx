@@ -1,14 +1,11 @@
-import { HashRouter } from 'react-router-dom'
+import { AppServiceProvider } from '@/app/app-service.tsx'
+import { AppRouter } from '@/app/router.tsx'
 
 function App() {
   return (
-    <HashRouter>
-      <main className="foundation-shell">
-        <p className="eyebrow">ACCOUNT BOOK</p>
-        <h1>모바일 가계부</h1>
-        <p>Google Spreadsheet 연결을 준비하고 있습니다.</p>
-      </main>
-    </HashRouter>
+    <AppServiceProvider>
+      <AppRouter />
+    </AppServiceProvider>
   )
 }
 
