@@ -44,13 +44,16 @@ jobs:
           VITE_BOOTSTRAP_SPREADSHEET_ID: ${{ vars.VITE_BOOTSTRAP_SPREADSHEET_ID }}
           VITE_TEST_SPREADSHEET_ID: ${{ vars.VITE_TEST_SPREADSHEET_ID }}
 
+      - name: Verify Pages artifact
+        run: test -f dist/client/index.html
+
       - name: Configure Pages
         uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: dist
+          path: dist/client
 
   deploy:
     environment:
