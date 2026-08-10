@@ -14,6 +14,7 @@ interface HarnessOptions {
   bootstrapSpreadsheetId?: string
   testSpreadsheetId?: string
   workbooks?: WorkbookSeed[]
+  stripTransactionIdsOnAppend?: boolean
   stripTransferIdsOnAppend?: boolean
 }
 
@@ -23,6 +24,7 @@ function createHarness(options: HarnessOptions = {}) {
   const fakeSheetsClient = new FakeSheetsClient(
     options.workbooks ?? createDefaultWorkbooks(),
     {
+      stripTransactionIdsOnAppend: options.stripTransactionIdsOnAppend,
       stripTransferIdsOnAppend: options.stripTransferIdsOnAppend,
     },
   )
@@ -396,6 +398,42 @@ describe('GoogleSheetsLedgerRepository', () => {
     expect(fakeSheetsClient.appendCalls).toHaveLength(1)
     expect(second.transaction.id).toBe(first.transaction.id)
     expect(second.transaction.id).toBe('txn_requestsaferetry')
+  })
+
+  it('repairs missing metadata on the exact appended row and returns the saved transaction', async () => {
+    const { repository, fakeSheetsClient } = createHarness({
+      stripTransactionIdsOnAppend: true,
+    })
+    await repository.getYearGraph()
+
+    const saved = await repository.appendTransaction({
+      clientRequestId: 'repair-missing-id',
+      type: 'expense',
+      date: '2026-08-15',
+      amount: 3000,
+      description: 'Metadata repair',
+      account: 'Checking',
+      category: 'Food',
+    })
+
+    expect(saved.transaction).toMatchObject({
+      id: 'txn_repairmissingid',
+      description: 'Metadata repair',
+      amount: -3000,
+    })
+    expect(fakeSheetsClient.appendCalls).toHaveLength(1)
+    expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(1)
+    expect(fakeSheetsClient.batchUpdateValuesCalls[0]?.data).toEqual([
+      {
+        range: expect.stringMatching(/'8'!X\d+:Z\d+/),
+        values: [['expense', 'txn_repairmissingid', '']],
+      },
+    ])
+
+    const stored = (await repository.getMonthTransactions(2026, 8)).find(
+      (transaction) => transaction.description === 'Metadata repair',
+    )
+    expect(stored?.id).toBe('txn_repairmissingid')
   })
 
   it('returns an existing transfer pair when the same client request is retried', async () => {

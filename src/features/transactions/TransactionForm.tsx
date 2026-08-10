@@ -322,17 +322,19 @@ export function TransactionForm({
       ) : null}
 
       <div className="date-wheel" aria-label="날짜 조절">
-        <button
-          type="button"
-          className="icon-button icon-button--soft"
-          onClick={() => setField('date', shiftDate(form.date, -1))}
-          disabled={isBusy}
-          aria-label="하루 이전"
-        >
-          {'<'}
-        </button>
-        <label className="field field--centered" htmlFor={`${formId}-date`}>
-          <span>날짜</span>
+        <label className="date-wheel__label" htmlFor={`${formId}-date`}>
+          날짜
+        </label>
+        <div className="date-wheel__controls">
+          <button
+            type="button"
+            className="icon-button icon-button--soft"
+            onClick={() => setField('date', shiftDate(form.date, -1))}
+            disabled={isBusy}
+            aria-label="하루 이전"
+          >
+            {'<'}
+          </button>
           <input
             id={`${formId}-date`}
             type="date"
@@ -340,16 +342,16 @@ export function TransactionForm({
             onChange={(event) => setField('date', event.target.value)}
             disabled={isBusy}
           />
-        </label>
-        <button
-          type="button"
-          className="icon-button icon-button--soft"
-          onClick={() => setField('date', shiftDate(form.date, 1))}
-          disabled={isBusy}
-          aria-label="하루 이후"
-        >
-          {'>'}
-        </button>
+          <button
+            type="button"
+            className="icon-button icon-button--soft"
+            onClick={() => setField('date', shiftDate(form.date, 1))}
+            disabled={isBusy}
+            aria-label="하루 이후"
+          >
+            {'>'}
+          </button>
+        </div>
       </div>
 
       <label className="field" htmlFor={`${formId}-amount`}>

@@ -199,6 +199,22 @@ textarea:focus-visible {
   line-height: 1.15;
 }
 
+.app-header__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.app-header__version {
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
 .app-header__eyebrow {
   margin: 0 0 5px;
   color: var(--color-primary);
@@ -490,12 +506,40 @@ button:not(:disabled):active {
   text-align: center;
 }
 
-.date-wheel,
+.date-wheel {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.date-wheel__label {
+  color: #465049;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.date-wheel__controls,
 .month-switcher {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 46px minmax(0, 1fr) 46px;
   gap: 8px;
-  align-items: end;
+  align-items: center;
+  min-width: 0;
+}
+
+.date-wheel__controls input[type='date'] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+}
+
+.date-wheel__controls .icon-button {
+  width: 46px;
+  min-width: 46px;
+  align-self: center;
 }
 
 .field-row {

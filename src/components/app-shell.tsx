@@ -59,7 +59,10 @@ export function AppShell() {
       <header className="app-header">
         <div>
           <p className="app-header__eyebrow">ACCOUNT BOOK</p>
-          <h1 className="app-header__title">모바일 가계부</h1>
+          <div className="app-header__title-row">
+            <h1 className="app-header__title">모바일 가계부</h1>
+            <span className="app-header__version">{__APP_VERSION__}</span>
+          </div>
         </div>
         <button
           type="button"

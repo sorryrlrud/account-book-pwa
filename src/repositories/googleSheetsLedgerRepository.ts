@@ -35,6 +35,7 @@ import {
   buildAppendRows,
   collapseTransferPairs,
   matchesLegacyFingerprint,
+  parseTransactionRow,
   parseTransactions,
 } from '@/services/sheets/transactionAdapter.ts'
 import type { AppEnv } from '@/services/env.ts'
@@ -236,30 +237,35 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     )
 
     const rowNumbers = this.#extractAppendedRowNumbers(response, appendRows.rows.length)
-    if (draft.type === 'transfer') {
-      if (!appendRows.transferId) {
-        throw new AppError('TRANSFER_INTEGRITY', '이체 정보를 기록하지 못했습니다.')
-      }
-
-      try {
-        await this.#ensureTransferMetadata(
-          config.spreadsheetId,
-          month,
-          rowNumbers,
-          appendRows.transferId,
-        )
-      } catch (error) {
-        throw new AppError(
-          'TRANSFER_INTEGRITY',
-          '이체 금융 행이 저장되었을 수 있습니다. 다시 저장하지 말고 Sheet를 확인해주세요.',
-          { cause: error },
-        )
-      }
+    try {
+      await this.#ensureAppendedMetadata(
+        config.spreadsheetId,
+        month,
+        rowNumbers,
+        appendRows,
+      )
+    } catch (error) {
+      const message = draft.type === 'transfer'
+        ? '이체 금융 행이 저장되었을 수 있습니다. 다시 저장하지 말고 Sheet를 확인해주세요.'
+        : '거래 행이 저장되었을 수 있습니다. 다시 저장하지 말고 Sheet를 확인해주세요.'
+      throw new AppError(
+        draft.type === 'transfer' ? 'TRANSFER_INTEGRITY' : 'GOOGLE_API_ERROR',
+        message,
+        { cause: error },
+      )
     }
 
-    const transactions = await this.#getRawMonthTransactions(year, month)
+    const appendedTransactions = appendRows.rows.map((values, index) =>
+      parseTransactionRow(year, month, {
+        rowNumber: rowNumbers[index],
+        values,
+      }),
+    )
+
     if (appendRows.transferId) {
-      const matched = transactions.filter((transaction) => transaction.transferId === appendRows.transferId)
+      const matched = appendedTransactions.filter(
+        (transaction): transaction is Transaction => Boolean(transaction),
+      )
       if (matched.length !== 2) {
         throw new AppError('TRANSFER_INTEGRITY', '이체 저장 결과를 확인하지 못했습니다.')
       }
@@ -267,9 +273,9 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       return this.#buildSavedTransfer(matched[0], matched[1])
     }
 
-    const transaction = transactions.find((item) => item.id === appendRows.transactionId)
+    const transaction = appendedTransactions[0]
     if (!transaction) {
-      throw new AppError('NOT_FOUND', '저장된 거래를 다시 찾지 못했습니다.')
+      throw new AppError('GOOGLE_API_ERROR', '저장 결과를 해석하지 못했습니다.')
     }
 
     return { transaction }
@@ -892,11 +898,11 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     return rows
   }
 
-  async #ensureTransferMetadata(
+  async #ensureAppendedMetadata(
     spreadsheetId: string,
     month: number,
     rowNumbers: number[],
-    transferId: string,
+    appendRows: ReturnType<typeof buildAppendRows>,
   ): Promise<void> {
     const verification = await this.#sheetsClient.batchGetValues(
       spreadsheetId,
@@ -905,20 +911,20 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
     const updates = verification.valueRanges.flatMap((range, index) => {
       const rowValues = range.values?.[0] ?? []
-      if (trimCell(rowValues[25]) === transferId) {
+      const expectedMetadata = appendRows.rows[index]?.slice(23, 26) ?? []
+      const currentMetadata = rowValues.slice(23, 26).map(trimCell)
+      if (
+        expectedMetadata.length === 3 &&
+        expectedMetadata.every((value, metadataIndex) =>
+          trimCell(value) === currentMetadata[metadataIndex]
+        )
+      ) {
         return []
       }
 
-      const nextRow = [...rowValues]
-      while (nextRow.length < 26) {
-        nextRow.push('')
-      }
-      nextRow[23] = 'transfer'
-      nextRow[24] = ''
-      nextRow[25] = transferId
       return [{
-        range: buildRowRange(String(month), rowNumbers[index]),
-        values: [nextRow],
+        range: buildRowRange(String(month), rowNumbers[index], 'X:Z'),
+        values: [expectedMetadata],
       }]
     })
 

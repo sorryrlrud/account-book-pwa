@@ -8,8 +8,30 @@ const base =
   process.env.VITE_BASE_PATH ??
   (repositoryName ? `/${repositoryName}/` : '/')
 
+function createBuildVersion(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    year: '2-digit',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const getPart = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ''
+
+  return `v${getPart('year')}${getPart('month')}${getPart('day')}.${getPart('hour')}${getPart('minute')}${getPart('second')}`
+}
+
+const appVersion = process.env.VITE_APP_VERSION || createBuildVersion()
+
 export default defineConfig({
   base,
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -148,6 +148,7 @@ https://sorryrlrud.github.io
 - base path는 `/account-book-pwa/`
 - manifest `start_url`은 `#/entry`
 - service worker scope는 repository sub-path 기준
+- 상단 버전은 배포 빌드 시점의 한국 시간으로 `vYYMMDD.HHMMSS` 형식으로 자동 생성
 
 ## PWA and mobile verification
 

@@ -39,6 +39,7 @@ interface ParsedRange {
 }
 
 export interface FakeSheetsClientOptions {
+  stripTransactionIdsOnAppend?: boolean
   stripTransferIdsOnAppend?: boolean
 }
 
@@ -140,12 +141,13 @@ export class FakeSheetsClient {
     const sheet = this.#getSheet(spreadsheetId, parsed.sheetName)
     const startRow = sheet.values.length + 1
     const storedRows = cloneRows(values).map((row) => {
-      if (!this.#options.stripTransferIdsOnAppend || row[23] !== 'transfer') {
-        return row
-      }
-
       const nextRow = cloneRow(row)
-      nextRow[25] = ''
+      if (this.#options.stripTransactionIdsOnAppend && row[23] !== 'transfer') {
+        nextRow[24] = ''
+      }
+      if (this.#options.stripTransferIdsOnAppend && row[23] === 'transfer') {
+        nextRow[25] = ''
+      }
       return nextRow
     })
 
