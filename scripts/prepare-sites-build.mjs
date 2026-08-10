@@ -1,6 +1,8 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rename, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
+const buildDirectory = resolve('dist')
+const clientDirectory = resolve(buildDirectory, 'client')
 const serverDirectory = resolve('dist/server')
 const workerEntry = `const worker = {
   async fetch(request, env) {
@@ -20,6 +22,19 @@ const workerEntry = `const worker = {
 
 export default worker
 `
+
+await mkdir(clientDirectory, { recursive: true })
+const buildEntries = await readdir(buildDirectory)
+for (const entry of buildEntries) {
+  if (['.openai', 'client', 'server'].includes(entry)) {
+    continue
+  }
+
+  await rename(
+    resolve(buildDirectory, entry),
+    resolve(clientDirectory, entry),
+  )
+}
 
 await mkdir(serverDirectory, { recursive: true })
 await writeFile(resolve(serverDirectory, 'index.js'), workerEntry)
