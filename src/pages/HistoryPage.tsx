@@ -179,7 +179,7 @@ export function HistoryPage() {
             disabled={isLoading}
             aria-label="이전 달"
           >
-            -
+            {'<'}
           </button>
           <input
             type="month"
@@ -201,7 +201,7 @@ export function HistoryPage() {
             disabled={isLoading}
             aria-label="다음 달"
           >
-            +
+            {'>'}
           </button>
         </div>
 

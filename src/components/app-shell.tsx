@@ -59,15 +59,6 @@ export function AppShell() {
         </button>
       </header>
 
-      <div className="status-banner" role="status">
-        <strong>{service.statusLabel}</strong>
-        <span>
-          {service.isConfigured
-            ? 'Google Sheet 연결됨'
-            : 'Google Sheet 연결 설정이 필요합니다.'}
-        </span>
-      </div>
-
       <aside
         id="app-menu-panel"
         className={`menu-panel${menuOpen ? ' is-open' : ''}`}

@@ -1,15 +1,37 @@
 export function parseSheetNumber(value: string | number | undefined): number {
   if (typeof value === 'number') {
-    return value
+    return Number.isFinite(value) ? value : 0
   }
 
   if (!value) {
     return 0
   }
 
-  const normalized = String(value).replaceAll(',', '').trim()
+  const source = String(value).trim()
+  const hasOpeningParenthesis = source.includes('(')
+  const hasClosingParenthesis = source.includes(')')
+  if (hasOpeningParenthesis !== hasClosingParenthesis) {
+    return 0
+  }
+
+  const isAccountingNegative = hasOpeningParenthesis && hasClosingParenthesis
+  const normalized = source
+    .replaceAll(/[\s,()]/g, '')
+    .replaceAll(/[₩￦]/g, '')
+    .replaceAll(/KRW/gi, '')
+    .replaceAll('원', '')
+    .replaceAll(/[−–—]/g, '-')
+
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) {
+    return 0
+  }
+
   const parsed = Number(normalized)
-  return Number.isFinite(parsed) ? parsed : 0
+  if (!Number.isFinite(parsed)) {
+    return 0
+  }
+
+  return isAccountingNegative ? -Math.abs(parsed) : parsed
 }
 
 export function normalizeBooleanCell(value: string | undefined): boolean {

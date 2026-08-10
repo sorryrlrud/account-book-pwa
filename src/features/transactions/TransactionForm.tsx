@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { formatDateHeading, shiftDate } from '@/features/transactions/date.ts'
-import { formatAmountPreview, toAmountInput } from '@/features/transactions/format.ts'
+import { toAmountInput } from '@/features/transactions/format.ts'
 import type {
   EntryMode,
   EntryTab,
@@ -280,7 +280,7 @@ export function TransactionForm({
           disabled={isBusy}
           aria-label="하루 이전"
         >
-          -
+          {'<'}
         </button>
         <label className="field field--centered" htmlFor={`${formId}-date`}>
           <span>날짜</span>
@@ -299,7 +299,7 @@ export function TransactionForm({
           disabled={isBusy}
           aria-label="하루 이후"
         >
-          +
+          {'>'}
         </button>
       </div>
 
@@ -316,7 +316,6 @@ export function TransactionForm({
           }
           disabled={isBusy}
         />
-        <strong className="amount-preview">{formatAmountPreview(form.amountInput)}</strong>
       </label>
 
       <label className="field" htmlFor={`${formId}-description`}>
@@ -330,38 +329,17 @@ export function TransactionForm({
         />
       </label>
 
-      <label className="field" htmlFor={`${formId}-account`}>
-        <span>{form.type === 'transfer' ? '출금 통장' : '통장'}</span>
-        <select
-          id={`${formId}-account`}
-          value={form.account}
-          onChange={(event) => setField('account', event.target.value)}
-          disabled={isBusy}
-        >
-          <option value="" disabled>
-            통장을 선택하세요
-          </option>
-          {accounts.map((account) => (
-            <option key={account} value={account}>
-              {account}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {form.type === 'transfer' ? (
-        <label className="field" htmlFor={`${formId}-destination`}>
-          <span>입금 통장</span>
+      <div className="field-row">
+        <label className="field" htmlFor={`${formId}-account`}>
+          <span>{form.type === 'transfer' ? '출금 통장' : '통장'}</span>
           <select
-            id={`${formId}-destination`}
-            value={form.destinationAccount}
-            onChange={(event) =>
-              setField('destinationAccount', event.target.value)
-            }
+            id={`${formId}-account`}
+            value={form.account}
+            onChange={(event) => setField('account', event.target.value)}
             disabled={isBusy}
           >
             <option value="" disabled>
-              입금 통장을 선택하세요
+              통장을 선택하세요
             </option>
             {accounts.map((account) => (
               <option key={account} value={account}>
@@ -370,27 +348,50 @@ export function TransactionForm({
             ))}
           </select>
         </label>
-      ) : (
-        <div className="field">
-          <label htmlFor={`${formId}-category`}>카테고리</label>
-          <select
-            id={`${formId}-category`}
-            value={form.category}
-            onChange={(event) => setField('category', event.target.value)}
-            disabled={isBusy}
-          >
-            <option value="" disabled>
-              카테고리를 선택하세요
-            </option>
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
+
+        {form.type === 'transfer' ? (
+          <label className="field" htmlFor={`${formId}-destination`}>
+            <span>입금 통장</span>
+            <select
+              id={`${formId}-destination`}
+              value={form.destinationAccount}
+              onChange={(event) =>
+                setField('destinationAccount', event.target.value)
+              }
+              disabled={isBusy}
+            >
+              <option value="" disabled>
+                입금 통장 선택
               </option>
-            ))}
-          </select>
-          {budgetHint ? <p className="budget-hint">{budgetHint}</p> : null}
-        </div>
-      )}
+              {accounts.map((account) => (
+                <option key={account} value={account}>
+                  {account}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div className="field">
+            <label htmlFor={`${formId}-category`}>카테고리</label>
+            <select
+              id={`${formId}-category`}
+              value={form.category}
+              onChange={(event) => setField('category', event.target.value)}
+              disabled={isBusy}
+            >
+              <option value="" disabled>
+                카테고리 선택
+              </option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+            {budgetHint ? <p className="budget-hint">{budgetHint}</p> : null}
+          </div>
+        )}
+      </div>
 
       {validationMessage ? <p className="form-error">{validationMessage}</p> : null}
       {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
