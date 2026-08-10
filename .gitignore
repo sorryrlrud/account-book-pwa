@@ -15,6 +15,9 @@ dist-ssr
 .env.*
 !.env.example
 
+# Local Google OAuth credentials
+client_secret*.json
+
 # Local orchestration/tool state
 .serena/
 

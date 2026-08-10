@@ -57,6 +57,7 @@
 
 필수 규칙:
 
+- `A1:B1`은 각각 `key`, `value` 헤더이며 실제 설정값은 2행부터 시작
 - `schemaVersion`은 `1`
 - `year`는 Spreadsheet 연도와 일치
 - 개발/검증용 사본은 `environment`를 반드시 `TEST`로 지정

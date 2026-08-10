@@ -26,6 +26,8 @@ describe('SheetsClient', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({
       method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
     })
 
     const headers = new Headers(fetchImpl.mock.calls[0]?.[1]?.headers)
@@ -99,8 +101,31 @@ describe('SheetsClient', () => {
 
     await expect(client.getValues('spreadsheet-id', "'8'!A:Z")).rejects.toMatchObject({
       code: 'NETWORK_ERROR',
+      userMessage:
+        'Google Sheets API에 연결하지 못했습니다. 네트워크와 Safari 콘텐츠 차단 설정을 확인해주세요.',
     })
     expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('calls the browser fetch implementation with the global receiver', async () => {
+    const fetchImpl = vi.fn(function (this: unknown) {
+      expect(this).toBe(globalThis)
+      return Promise.resolve(jsonResponse({ values: [['ok']] }))
+    })
+    vi.stubGlobal('fetch', fetchImpl)
+
+    try {
+      const client = new SheetsClient({
+        getAccessToken: () => 'sheet-token',
+      })
+
+      await expect(client.getValues('spreadsheet-id', "'8'!A:Z")).resolves.toMatchObject({
+        values: [['ok']],
+      })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('supports 204 responses for mutation requests', async () => {

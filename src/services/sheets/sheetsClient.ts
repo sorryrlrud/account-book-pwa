@@ -37,13 +37,15 @@ function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500
 }
 
+const callGlobalFetch: typeof fetch = (input, init) => globalThis.fetch(input, init)
+
 export class SheetsClient {
   readonly #fetchImpl: typeof fetch
   readonly #getAccessToken: () => string
   readonly #maxReadRetries: number
 
   constructor(options: SheetsClientOptions) {
-    this.#fetchImpl = options.fetchImpl ?? fetch
+    this.#fetchImpl = options.fetchImpl ?? callGlobalFetch
     this.#getAccessToken = options.getAccessToken
     this.#maxReadRetries = options.maxReadRetries ?? 2
   }
@@ -160,6 +162,8 @@ export class SheetsClient {
       try {
         const response = await this.#fetchImpl(url, {
           ...init,
+          mode: 'cors',
+          credentials: 'omit',
           headers,
         })
 
@@ -215,8 +219,12 @@ export class SheetsClient {
       throw lastError
     }
 
-    throw new AppError('NETWORK_ERROR', '네트워크 상태를 확인하고 다시 시도해주세요.', {
-      cause: lastError,
-    })
+    throw new AppError(
+      'NETWORK_ERROR',
+      'Google Sheets API에 연결하지 못했습니다. 네트워크와 Safari 콘텐츠 차단 설정을 확인해주세요.',
+      {
+        cause: lastError,
+      },
+    )
   }
 }
