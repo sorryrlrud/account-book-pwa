@@ -19,7 +19,7 @@ describe('GoogleIdentityService', () => {
     })
   })
 
-  it('requests a token, stores it in memory, and uses requested scopes as fallback', async () => {
+  it('requests a token without repeating consent and uses requested scopes as fallback', async () => {
     let requestedPrompt = ''
     const service = new GoogleIdentityService({
       env,
@@ -64,7 +64,7 @@ describe('GoogleIdentityService', () => {
 
     const snapshot = await service.requestAccessToken(['scope:a', 'scope:b'])
 
-    expect(requestedPrompt).toBe('consent')
+    expect(requestedPrompt).toBe('')
     expect(snapshot.accessToken).toBe('token-123')
     expect(snapshot.scopes).toEqual(['scope:a', 'scope:b'])
     expect(service.tokenStore.get()).toMatchObject({
@@ -142,6 +142,34 @@ describe('GoogleIdentityService', () => {
 
     await expect(service.requestAccessToken()).rejects.toMatchObject({
       code: 'AUTH_REQUIRED',
+    })
+  })
+
+  it('finishes with a useful error when the popup is closed', async () => {
+    const service = new GoogleIdentityService({
+      env,
+      windowRef: {
+        google: {
+          accounts: {
+            oauth2: {
+              initTokenClient: ({
+                error_callback,
+              }: {
+                error_callback: (error: { type: string }) => void
+              }) => ({
+                requestAccessToken: () => {
+                  error_callback({ type: 'popup_closed' })
+                },
+              }),
+            },
+          },
+        },
+      } as never,
+    })
+
+    await expect(service.requestAccessToken()).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+      userMessage: 'Google 로그인 창이 닫혔습니다. 다시 시도해주세요.',
     })
   })
 })

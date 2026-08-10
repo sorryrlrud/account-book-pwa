@@ -22,7 +22,9 @@ Google Spreadsheet를 Source of Truth로 사용하는 모바일 우선 가계부
 중요:
 
 - `VITE_GOOGLE_CLIENT_ID`는 public identifier이며 secret이 아니다.
-- Client Secret, access token, refresh token, 비밀번호는 저장하지 않는다.
+- Client Secret, refresh token, 비밀번호는 저장하지 않는다.
+- 단기 access token은 새로고침 복구를 위해 현재 탭의 `sessionStorage`에만 저장하고,
+  탭을 닫거나 로그아웃하거나 토큰이 만료되면 제거한다.
 - `.env.local`은 git에 추가하지 않는다.
 
 ## Requirements

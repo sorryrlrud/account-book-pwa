@@ -16,6 +16,9 @@ interface GoogleAccountsOauth2 {
       error_description?: string
       scope?: string
     }) => void
+    error_callback?: (error: {
+      type?: 'popup_failed_to_open' | 'popup_closed' | 'unknown' | string
+    }) => void
     prompt?: string
   }): {
     requestAccessToken: (override?: { prompt?: string }) => void
@@ -42,6 +45,7 @@ export class GoogleIdentityService {
   readonly #env: AppEnv
   readonly #tokenStore: InMemoryTokenStore
   readonly #windowRef: GoogleIdentityWindow
+  #pendingRequest?: Promise<AccessTokenSnapshot>
 
   constructor(options: GoogleIdentityServiceOptions) {
     this.#env = options.env
@@ -55,14 +59,18 @@ export class GoogleIdentityService {
 
   async requestAccessToken(
     scopes: string[] = [DEFAULT_SHEETS_SCOPE],
-    prompt: 'consent' | 'select_account' = 'consent',
+    prompt: '' | 'consent' | 'select_account' = '',
   ): Promise<AccessTokenSnapshot> {
+    if (this.#pendingRequest) {
+      return this.#pendingRequest
+    }
+
     const oauth2 = this.#windowRef.google?.accounts?.oauth2
     if (!oauth2) {
       throw new AppError('UNAVAILABLE', 'Google 인증 모듈을 불러오지 못했습니다.')
     }
 
-    return new Promise((resolve, reject) => {
+    const request = new Promise<AccessTokenSnapshot>((resolve, reject) => {
       const client = oauth2.initTokenClient({
         client_id: this.#env.googleClientId,
         scope: scopes.join(' '),
@@ -87,9 +95,28 @@ export class GoogleIdentityService {
           this.#tokenStore.set(snapshot)
           resolve(snapshot)
         },
+        error_callback: (error) => {
+          const popupClosed = error.type === 'popup_closed'
+          reject(
+            new AppError(
+              popupClosed ? 'AUTH_REQUIRED' : 'UNAVAILABLE',
+              popupClosed
+                ? 'Google 로그인 창이 닫혔습니다. 다시 시도해주세요.'
+                : 'Google 로그인 창을 열지 못했습니다. 팝업 차단 설정을 확인해주세요.',
+              { details: { oauthErrorType: error.type ?? 'unknown' } },
+            ),
+          )
+        },
       })
 
       client.requestAccessToken({ prompt })
     })
+
+    this.#pendingRequest = request
+    try {
+      return await request
+    } finally {
+      this.#pendingRequest = undefined
+    }
   }
 }

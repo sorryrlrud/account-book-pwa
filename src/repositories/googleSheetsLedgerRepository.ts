@@ -85,7 +85,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
   async bootstrap(): Promise<BootstrapResult> {
     const yearConfig = await this.verifyAccess(this.#env.bootstrapSpreadsheetId)
-    const yearGraph = await this.getYearGraph()
+    const yearGraph = await this.#buildYearGraph(yearConfig)
     return { yearConfig, yearGraph }
   }
 
@@ -102,6 +102,10 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
   async getYearGraph(): Promise<YearGraph> {
     const bootstrapConfig = await this.verifyAccess(this.#env.bootstrapSpreadsheetId)
+    return this.#buildYearGraph(bootstrapConfig)
+  }
+
+  async #buildYearGraph(bootstrapConfig: YearConfig): Promise<YearGraph> {
     const years = new Map<number, YearConfig>([[bootstrapConfig.year, bootstrapConfig]])
     const visitedSpreadsheetIds = new Set<string>([bootstrapConfig.spreadsheetId])
     this.#writeAllowedSpreadsheetIds.clear()

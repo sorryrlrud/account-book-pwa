@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -17,6 +18,10 @@ export function AppServiceProvider({ children }: { children: ReactNode }) {
   }
 
   const controller = controllerRef.current
+  useEffect(() => {
+    void controller.resumeSession()
+  }, [controller])
+
   const snapshot = useSyncExternalStore(
     controller.subscribe.bind(controller),
     controller.getSnapshot.bind(controller),

@@ -34,6 +34,7 @@ interface AppServiceControllerOptions {
   envSource?: ImportMetaEnv
   windowRef?: Window
   documentRef?: Document
+  tokenStorage?: Storage
 }
 
 interface AuthorizedServices {
@@ -315,6 +316,7 @@ export class AppServiceController {
   #state: InternalState
   #yearGraph?: YearGraph
   #yearConfigByYear = new Map<number, YearConfig>()
+  #resumePromise?: Promise<void>
 
   constructor(options: AppServiceControllerOptions = {}) {
     const { year, month } = getCurrentKstYearMonth()
@@ -323,7 +325,10 @@ export class AppServiceController {
 
     try {
       const env = readAppEnv(options.envSource ?? import.meta.env)
-      const tokenStore = new InMemoryTokenStore()
+      const tokenStore = new InMemoryTokenStore({
+        storage: options.tokenStorage,
+        storageKey: `account-book.google-access-token:${env.googleClientId}:${env.bootstrapSpreadsheetId}`,
+      })
       const identityService = new GoogleIdentityService({
         env,
         tokenStore,
@@ -377,7 +382,7 @@ export class AppServiceController {
   }
 
   async login(): Promise<void> {
-    await this.#authenticateAndBootstrap('consent')
+    await this.#authenticateAndBootstrap('')
   }
 
   async relogin(): Promise<void> {
@@ -411,6 +416,48 @@ export class AppServiceController {
 
   async bootstrap(): Promise<void> {
     await this.#runBootstrap()
+  }
+
+  async resumeSession(): Promise<void> {
+    if (this.#resumePromise) {
+      return this.#resumePromise
+    }
+
+    const run = async () => {
+      const services = this.#requireServices()
+      const snapshot = services.tokenStore.get()
+      if (!snapshot) {
+        return
+      }
+
+      // Do not start a multi-request bootstrap with a token that is about to
+      // expire. The user can obtain a fresh token with one explicit click.
+      if (snapshot.expiresAt <= Date.now() + 60_000) {
+        services.tokenStore.clear()
+        this.#setState(
+          createSignedOutState(
+            this.#state.currentYear,
+            this.#state.currentMonth,
+            Boolean(services.env.testSpreadsheetId),
+          ),
+        )
+        return
+      }
+
+      try {
+        await this.#runBootstrap()
+      } catch {
+        // #runBootstrap already converts the failure into a visible auth state.
+      }
+    }
+
+    const promise = run()
+    this.#resumePromise = promise
+    try {
+      await promise
+    } finally {
+      this.#resumePromise = undefined
+    }
   }
 
   async getReferenceData(year = this.#state.currentYear): Promise<TransactionReferenceData> {
@@ -613,7 +660,7 @@ export class AppServiceController {
   }
 
   async #authenticateAndBootstrap(
-    prompt: 'consent' | 'select_account',
+    prompt: '' | 'consent' | 'select_account',
   ): Promise<void> {
     const services = this.#requireServices()
     this.#setState(
@@ -771,21 +818,11 @@ export class AppServiceController {
     const normalized = normalizeError(error)
     const services = this.#services
 
-    if (
-      normalized.code === 'AUTH_REQUIRED' ||
-      normalized.code === 'AUTH_EXPIRED' ||
-      normalized.code === 'ACCESS_DENIED' ||
-      normalized.code === 'NETWORK_ERROR' ||
-      normalized.code === 'CONFIG_MISSING' ||
-      normalized.code === 'UNAVAILABLE' ||
-      normalized.code === 'GOOGLE_API_ERROR'
-    ) {
-      if (normalized.code === 'AUTH_REQUIRED' || normalized.code === 'AUTH_EXPIRED') {
-        services?.tokenStore.clear()
-      }
-      this.#clearAuthorizedData()
-      this.#setState(buildErrorState(this.#state, normalized))
+    if (normalized.code === 'AUTH_REQUIRED' || normalized.code === 'AUTH_EXPIRED') {
+      services?.tokenStore.clear()
     }
+    this.#clearAuthorizedData()
+    this.#setState(buildErrorState(this.#state, normalized))
 
     throw normalized
   }

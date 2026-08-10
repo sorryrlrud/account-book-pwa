@@ -197,6 +197,24 @@ function withLegacyCalculatedCells(row: string[], marker: string): string[] {
 }
 
 describe('GoogleSheetsLedgerRepository', () => {
+  it('reuses the verified bootstrap config instead of loading the root twice', async () => {
+    const { repository, fakeSheetsClient } = createHarness()
+    const getSpreadsheet = vi.spyOn(fakeSheetsClient, 'getSpreadsheet')
+    const getValues = vi.spyOn(fakeSheetsClient, 'getValues')
+
+    await repository.bootstrap()
+
+    expect(
+      getSpreadsheet.mock.calls.filter(([spreadsheetId]) => spreadsheetId === 'sheet-2026'),
+    ).toHaveLength(1)
+    expect(
+      getValues.mock.calls.filter(
+        ([spreadsheetId, range]) =>
+          spreadsheetId === 'sheet-2026' && range === buildRange('앱설정', 'A:B'),
+      ),
+    ).toHaveLength(1)
+  })
+
   it('builds settlement balances from month 0 plus prior months and uses only the selected month for income and expense totals', async () => {
     const { repository } = createHarness({
       workbooks: [
