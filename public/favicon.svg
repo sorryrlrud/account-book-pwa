@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="가계부">
+  <rect width="512" height="512" rx="112" fill="#174a3b"/>
+  <path d="M136 122h240a32 32 0 0 1 32 32v244H136a32 32 0 0 1-32-32V154a32 32 0 0 1 32-32Z" fill="#f6f7f2"/>
+  <path d="M152 122v276" stroke="#c9d9d1" stroke-width="20"/>
+  <path d="M205 205h146M205 264h108M205 323h146" stroke="#174a3b" stroke-width="22" stroke-linecap="round"/>
+</svg>
