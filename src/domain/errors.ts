@@ -7,7 +7,6 @@ export type AppErrorCode =
   | 'SCHEMA_MISMATCH'
   | 'UNSUPPORTED_SCHEMA'
   | 'NETWORK_ERROR'
-  | 'WRITE_GUARD'
   | 'VALIDATION_ERROR'
   | 'NOT_FOUND'
   | 'CONFLICT'

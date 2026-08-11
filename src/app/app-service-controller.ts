@@ -348,7 +348,7 @@ export class AppServiceController {
       this.#state = createSignedOutState(
         year,
         month,
-        Boolean(env.testSpreadsheetId),
+        true,
       )
     } catch (error) {
       const appError = normalizeError(error)
@@ -409,7 +409,7 @@ export class AppServiceController {
       createSignedOutState(
         this.#state.currentYear,
         this.#state.currentMonth,
-        Boolean(services.env.testSpreadsheetId),
+        true,
       ),
     )
   }
@@ -443,7 +443,7 @@ export class AppServiceController {
           createSignedOutState(
             this.#state.currentYear,
             this.#state.currentMonth,
-            Boolean(services.env.testSpreadsheetId),
+            true,
           ),
         )
         return
@@ -494,7 +494,6 @@ export class AppServiceController {
   }
 
   async saveTransaction(draft: TransactionDraft): Promise<SavedTransactionResult> {
-    this.#assertWriteEnabled()
     const { year, month } = getYearMonthFromDate(draft.date)
     this.setCurrentYearMonth(year, month)
     return this.#withRepository((repository) => repository.appendTransaction(draft))
@@ -504,7 +503,6 @@ export class AppServiceController {
     transaction: Transaction,
     draft: TransactionDraft,
   ): Promise<SavedTransactionResult> {
-    this.#assertWriteEnabled()
     const { year, month } = getYearMonthFromDate(draft.date)
     this.setCurrentYearMonth(year, month)
     return this.#withRepository((repository) =>
@@ -513,7 +511,6 @@ export class AppServiceController {
   }
 
   async deleteTransaction(transaction: Transaction): Promise<void> {
-    this.#assertWriteEnabled()
     await this.#withRepository((repository) =>
       repository.deleteTransaction(buildTransactionLookup(transaction)),
     )
@@ -529,14 +526,12 @@ export class AppServiceController {
     groupName: string,
     adjustment: number,
   ): Promise<void> {
-    this.#assertWriteEnabled()
     await this.#withRepository((repository) =>
       repository.updateBudgetAdjustment(year, month, groupName, adjustment),
     )
   }
 
   async resetBudget(year: number, month: number, groupName: string): Promise<void> {
-    this.#assertWriteEnabled()
     await this.#withRepository((repository) =>
       repository.resetBudgetCarryOver(year, month, groupName),
     )
@@ -568,7 +563,6 @@ export class AppServiceController {
   }
 
   async createAccount(year: number, input: AccountMutation) {
-    this.#assertWriteEnabled()
     return this.#withRepository((repository) => repository.createAccount(year, input))
   }
 
@@ -577,19 +571,16 @@ export class AppServiceController {
     previousName: string,
     nextName: string,
   ): Promise<void> {
-    this.#assertWriteEnabled()
     await this.#withRepository((repository) =>
       repository.renameAccount(year, previousName, nextName),
     )
   }
 
   async disableAccount(year: number, name: string): Promise<void> {
-    this.#assertWriteEnabled()
     await this.#withRepository((repository) => repository.disableAccount(year, name))
   }
 
   async createCategory(year: number, input: CategoryMutation) {
-    this.#assertWriteEnabled()
     return this.#withRepository((repository) => repository.createCategory(year, input))
   }
 
@@ -598,14 +589,12 @@ export class AppServiceController {
     previousName: string,
     nextName: string,
   ): Promise<void> {
-    this.#assertWriteEnabled()
     await this.#withRepository((repository) =>
       repository.renameCategory(year, previousName, nextName),
     )
   }
 
   async disableCategory(year: number, name: string): Promise<void> {
-    this.#assertWriteEnabled()
     await this.#withRepository((repository) => repository.disableCategory(year, name))
   }
 
@@ -614,7 +603,6 @@ export class AppServiceController {
   }
 
   async linkYear(request: YearLinkRequest): Promise<LinkedYear[]> {
-    this.#assertWriteEnabled()
     return this.#withRepository(async (repository) => {
       const linkedYears = await repository.linkYear(request)
       this.#yearGraph = undefined
@@ -626,7 +614,6 @@ export class AppServiceController {
   }
 
   async syncMonthZero(year: number): Promise<void> {
-    this.#assertWriteEnabled()
     await this.#withRepository((repository) => repository.syncMonthZero(year))
   }
 
@@ -708,17 +695,11 @@ export class AppServiceController {
   }
 
   #setReadyState(yearConfig: YearConfig): void {
-    const services = this.#requireServices()
     const now = getCurrentKstYearMonth()
     const availableYears = this.#yearGraph?.years ?? new Map<number, YearConfig>()
     const currentYear = availableYears.has(now.year) ? now.year : yearConfig.year
     const currentMonth = currentYear === now.year ? now.month : 1
-    const canWrite =
-      Boolean(services.env.testSpreadsheetId) &&
-      services.env.testSpreadsheetId === services.env.bootstrapSpreadsheetId &&
-      yearConfig.environment?.trim().toUpperCase() === 'TEST'
-
-    this.#setState(createReadyState(currentYear, currentMonth, canWrite, yearConfig.year))
+    this.#setState(createReadyState(currentYear, currentMonth, true, yearConfig.year))
   }
 
   #ensureCurrentYear(graph: YearGraph): void {
@@ -800,23 +781,6 @@ export class AppServiceController {
     }
 
     return this.#requireServices().repository
-  }
-
-  #assertWriteEnabled(): void {
-    const services = this.#requireServices()
-    if (!services.env.testSpreadsheetId) {
-      throw new AppError(
-        'WRITE_GUARD',
-        'VITE_TEST_SPREADSHEET_ID가 설정되지 않아 쓰기 작업이 차단되어 있습니다.',
-      )
-    }
-
-    if (services.env.testSpreadsheetId !== services.env.bootstrapSpreadsheetId) {
-      throw new AppError(
-        'WRITE_GUARD',
-        'TEST Spreadsheet가 bootstrap Spreadsheet와 일치할 때만 쓰기 작업을 허용합니다.',
-      )
-    }
   }
 
   #handleError(error: unknown): never {

@@ -4,7 +4,6 @@ import { GoogleIdentityService } from './googleIdentityService.ts'
 const env = {
   googleClientId: 'client-id',
   bootstrapSpreadsheetId: 'bootstrap-id',
-  testSpreadsheetId: 'bootstrap-id',
 }
 
 describe('GoogleIdentityService', () => {

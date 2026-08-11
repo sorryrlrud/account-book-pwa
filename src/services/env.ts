@@ -3,14 +3,11 @@ import { AppError } from '@/domain/errors.ts'
 export interface AppEnv {
   googleClientId: string
   bootstrapSpreadsheetId: string
-  testSpreadsheetId: string
 }
 
 export function readAppEnv(env = import.meta.env): AppEnv {
   const googleClientId = env.VITE_GOOGLE_CLIENT_ID?.trim()
   const bootstrapSpreadsheetId = env.VITE_BOOTSTRAP_SPREADSHEET_ID?.trim()
-  const testSpreadsheetId = env.VITE_TEST_SPREADSHEET_ID?.trim() ?? ''
-
   if (!googleClientId || !bootstrapSpreadsheetId) {
     throw new AppError(
       'CONFIG_MISSING',
@@ -21,6 +18,5 @@ export function readAppEnv(env = import.meta.env): AppEnv {
   return {
     googleClientId,
     bootstrapSpreadsheetId,
-    testSpreadsheetId,
   }
 }

@@ -42,7 +42,6 @@ jobs:
           VITE_BASE_PATH: /account-book-pwa/
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_BOOTSTRAP_SPREADSHEET_ID: ${{ vars.VITE_BOOTSTRAP_SPREADSHEET_ID }}
-          VITE_TEST_SPREADSHEET_ID: ${{ vars.VITE_TEST_SPREADSHEET_ID }}
 
       - name: Verify Pages artifact
         run: test -f dist/client/index.html

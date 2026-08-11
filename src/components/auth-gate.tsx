@@ -45,10 +45,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
             <p>배포 환경에 다음 Repository Variables를 설정해주세요.</p>
             <code>VITE_GOOGLE_CLIENT_ID</code>
             <code>VITE_BOOTSTRAP_SPREADSHEET_ID</code>
-            <p>
-              쓰기 기능은 TEST 사본을 가리키는{' '}
-              <code>VITE_TEST_SPREADSHEET_ID</code>가 있어야 활성화됩니다.
-            </p>
           </div>
         ) : null}
 
@@ -74,7 +70,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         ) : null}
 
         <p className="auth-card__safety">
-          실제 가계부 원본에는 테스트 쓰기를 수행하지 않습니다.
+          저장한 거래는 연결된 Google Sheet에 바로 반영됩니다.
         </p>
       </section>
     </main>

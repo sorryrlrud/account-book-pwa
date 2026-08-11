@@ -10,12 +10,10 @@ describe('readAppEnv', () => {
       readAppEnv({
         VITE_GOOGLE_CLIENT_ID: '  test-client-id  ',
         VITE_BOOTSTRAP_SPREADSHEET_ID: '  spreadsheet-id  ',
-        VITE_TEST_SPREADSHEET_ID: '  spreadsheet-id  ',
       } as ReadAppEnvInput),
     ).toEqual({
       googleClientId: 'test-client-id',
       bootstrapSpreadsheetId: 'spreadsheet-id',
-      testSpreadsheetId: 'spreadsheet-id',
     })
   })
 
@@ -39,7 +37,7 @@ describe('readAppEnv', () => {
     }
   })
 
-  it('keeps reads configurable while leaving writes disabled without a TEST id', () => {
+  it('allows a configured spreadsheet without a separate TEST id', () => {
     expect(
       readAppEnv({
         VITE_GOOGLE_CLIENT_ID: 'client-id',
@@ -48,7 +46,6 @@ describe('readAppEnv', () => {
     ).toEqual({
       googleClientId: 'client-id',
       bootstrapSpreadsheetId: 'spreadsheet-id',
-      testSpreadsheetId: '',
     })
   })
 })

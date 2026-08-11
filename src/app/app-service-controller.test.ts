@@ -6,7 +6,6 @@ import { AppServiceController } from './app-service-controller.ts'
 const env = {
   VITE_GOOGLE_CLIENT_ID: 'resume-client-id',
   VITE_BOOTSTRAP_SPREADSHEET_ID: 'resume-sheet-id',
-  VITE_TEST_SPREADSHEET_ID: 'resume-sheet-id',
 } as ImportMetaEnv
 
 const storageKey =

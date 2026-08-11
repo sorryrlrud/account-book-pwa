@@ -72,7 +72,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
   readonly #tokenStore: InMemoryTokenStore
   readonly #sheetsClient: SheetsClient
   readonly #connectedYearConfigCache = new Map<number, YearConfig>()
-  readonly #writeAllowedSpreadsheetIds = new Set<string>()
 
   constructor(options: GoogleSheetsLedgerRepositoryOptions) {
     this.#env = options.env
@@ -109,11 +108,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
   async #buildYearGraph(bootstrapConfig: YearConfig): Promise<YearGraph> {
     const years = new Map<number, YearConfig>([[bootstrapConfig.year, bootstrapConfig]])
     const visitedSpreadsheetIds = new Set<string>([bootstrapConfig.spreadsheetId])
-    this.#writeAllowedSpreadsheetIds.clear()
-    if (this.#isTestYearConfig(bootstrapConfig)) {
-      this.#writeAllowedSpreadsheetIds.add(bootstrapConfig.spreadsheetId)
-    }
-
     let previousNeighbor = bootstrapConfig
     let previousId = previousNeighbor.previousSpreadsheetId
     while (previousId) {
@@ -132,9 +126,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
         )
       }
       years.set(config.year, config)
-      if (this.#isTestYearConfig(config)) {
-        this.#writeAllowedSpreadsheetIds.add(config.spreadsheetId)
-      }
       previousNeighbor = config
       previousId = config.previousSpreadsheetId
     }
@@ -157,9 +148,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
         )
       }
       years.set(config.year, config)
-      if (this.#isTestYearConfig(config)) {
-        this.#writeAllowedSpreadsheetIds.add(config.spreadsheetId)
-      }
       nextNeighbor = config
       nextId = config.nextSpreadsheetId
     }
@@ -204,8 +192,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     }
 
     const config = await this.#resolveYearConfig(year)
-    this.#assertWriteAllowed(config.spreadsheetId)
-
     const appendRows = buildAppendRows(draft)
     const existingTransactions = await this.#getRawMonthTransactions(year, month)
     if (appendRows.transferId) {
@@ -302,7 +288,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       if (!outgoing?.sourceRow || !incoming?.sourceRow) {
         throw new AppError('TRANSFER_INTEGRITY', '연결된 이체 거래를 찾지 못했습니다.')
       }
-      this.#assertWriteAllowed(located.spreadsheetId)
       const rows = buildAppendRows(draft).rows
       for (const row of rows) {
         row[24] = ''
@@ -381,8 +366,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
   async deleteTransaction(lookup: TransactionLookup): Promise<void> {
     const located = await this.#locateTransaction(lookup)
-    this.#assertWriteAllowed(located.spreadsheetId)
-
     const rows = [located.transaction.sourceRow]
     if (located.sibling?.sourceRow) {
       rows.push(located.sibling.sourceRow)
@@ -416,7 +399,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
   async createAccount(year: number, input: AccountMutation): Promise<Account> {
     const config = await this.#resolveYearConfig(year)
-    this.#assertWriteAllowed(config.spreadsheetId)
     const accounts = await this.getAccounts(year)
     const name = input.name.trim()
     if (!name) {
@@ -456,7 +438,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
   async createCategory(year: number, input: CategoryMutation): Promise<Category> {
     const config = await this.#resolveYearConfig(year)
-    this.#assertWriteAllowed(config.spreadsheetId)
     const categories = await this.getCategories(year)
     const name = input.name.trim()
     if (!name) {
@@ -532,7 +513,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     adjustment: number,
   ): Promise<void> {
     const config = await this.#resolveYearConfig(year)
-    this.#assertWriteAllowed(config.spreadsheetId)
     const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D'))
     const rowNumber = this.#findBudgetSourceRow(range, month, groupName)
     await this.#sheetsClient.updateValues(
@@ -581,17 +561,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     if (targetConfig.year !== request.year) {
       throw new AppError('VALIDATION_ERROR', '연도 값과 Spreadsheet 설정이 일치하지 않습니다.')
     }
-    if (!this.#isTestYearConfig(targetConfig)) {
-      throw new AppError(
-        'WRITE_GUARD',
-        '연결할 TEST Spreadsheet의 앱설정에 environment = TEST가 필요합니다.',
-      )
-    }
-
-    // A linked year is writable only when its own human-readable app settings
-    // explicitly identify it as a TEST workbook.
-    this.#writeAllowedSpreadsheetIds.add(targetConfig.spreadsheetId)
-
     const updates: Array<{ spreadsheetId: string; values: string[][] }> = [{
       spreadsheetId: targetConfig.spreadsheetId,
       values: this.#buildAppSettingsRows({
@@ -622,9 +591,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     }
 
     for (const update of updates) {
-      this.#assertWriteAllowed(update.spreadsheetId)
-    }
-    for (const update of updates) {
       await this.#sheetsClient.updateValues(update.spreadsheetId, buildRange('앱설정', 'A:B'), update.values)
     }
 
@@ -646,7 +612,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       throw new AppError('NOT_FOUND', '이전 연도 연결 정보를 찾지 못했습니다.')
     }
 
-    this.#assertWriteAllowed(currentYear.spreadsheetId)
     const [
       previousDecember,
       currentSnapshot,
@@ -846,19 +811,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     return config
   }
 
-  #assertWriteAllowed(spreadsheetId: string): void {
-    if (
-      !this.#env.testSpreadsheetId ||
-      this.#env.testSpreadsheetId !== this.#env.bootstrapSpreadsheetId ||
-      !this.#writeAllowedSpreadsheetIds.has(spreadsheetId)
-    ) {
-      throw new AppError(
-        'WRITE_GUARD',
-        'TEST Spreadsheet 연결이 확인되지 않아 저장할 수 없습니다.',
-      )
-    }
-  }
-
   #validateDraft(draft: TransactionDraft): void {
     if (draft.amount <= 0 || !draft.description.trim() || !draft.account.trim()) {
       throw new AppError('VALIDATION_ERROR', '입력값을 다시 확인해주세요.')
@@ -995,7 +947,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     transaction: Transaction,
     fingerprint: LegacyTransactionFingerprint,
   ): Promise<Transaction> {
-    this.#assertWriteAllowed(spreadsheetId)
     if (!matchesLegacyFingerprint(transaction, fingerprint)) {
       throw new AppError(
         'CONFLICT',
@@ -1033,7 +984,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     rowNumber: number,
     rowValues: string[],
   ): Promise<void> {
-    this.#assertWriteAllowed(spreadsheetId)
     await this.#sheetsClient.updateValues(
       spreadsheetId,
       buildRowRange(String(month), rowNumber),
@@ -1050,8 +1000,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     monthColumnIndex: number,
   ): Promise<void> {
     const config = await this.#resolveYearConfig(year)
-    this.#assertWriteAllowed(config.spreadsheetId)
-
     const masterRange = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange(masterSheet, 'A:D'))
     const rows = masterRange.values ?? []
     const rowIndex = rows.findIndex((row, index) => index > 0 && trimCell(row[masterNameColumnIndex]) === previousName)
@@ -1104,7 +1052,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
   async #toggleMasterActive(year: number, masterSheet: '통장' | '카테고리', name: string, active: boolean): Promise<void> {
     const config = await this.#resolveYearConfig(year)
-    this.#assertWriteAllowed(config.spreadsheetId)
     const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange(masterSheet, 'A:D'))
     const rows = range.values ?? []
     const rowIndex = rows.findIndex((row, index) => index > 0 && trimCell(row[0]) === name)
@@ -1201,10 +1148,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       ['createdAt', toUserEnteredLiteral(config.createdAt ?? '')],
       ['updatedAt', new Date().toISOString()],
     ]
-  }
-
-  #isTestYearConfig(config: YearConfig): boolean {
-    return config.environment?.trim().toUpperCase() === 'TEST'
   }
 
   #buildMoveRequestId(

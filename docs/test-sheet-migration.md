@@ -7,7 +7,6 @@
 - 실제 `가계부_2026` 원본에는 앱 write 테스트를 하지 않는다.
 - 먼저 Google Drive에서 원본을 복사해 TEST 사본을 만든다.
 - 앱 기본 bootstrap ID로 원본 ID를 넣지 않는다.
-- TEST Spreadsheet ID가 설정되지 않으면 write 기능을 사용하지 않는다.
 - 자동화 도구로 기존 수식/우측 영역을 삭제하지 않는다.
 
 ## Recommended naming
@@ -52,7 +51,7 @@
 
 연도 연결 시:
 
-- 연결되는 모든 TEST 연도 Sheet에 `environment = TEST`를 설정한다.
+- `environment = TEST`는 TEST 사본 식별용 메타데이터로 유지한다.
 - `2026.nextSpreadsheetId = 2027 TEST ID`
 - `2027.previousSpreadsheetId = 2026 TEST ID`
 

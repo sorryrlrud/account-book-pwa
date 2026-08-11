@@ -9,7 +9,6 @@
 - OAuth Web Client ID 발급 완료
 - GitHub Pages 배포 완료
 - 대상 Google 계정에 TEST Spreadsheet 공유 완료
-- 연결할 모든 연도 Sheet의 `앱설정.environment`가 `TEST`
 - 최초 TEST 연도의 `0!AB:AC` 통장별 연도 시작잔액 검증 완료
 
 ## A. OAuth and access
@@ -22,9 +21,7 @@
 
 ## B. Transaction write safety
 
-- [ ] TEST Spreadsheet ID가 비어 있으면 write가 차단된다.
-- [ ] bootstrap ID와 TEST ID가 다르면 write가 차단된다.
-- [ ] `environment = TEST`가 없는 연결 연도 Sheet에는 write가 차단된다.
+- [ ] 로그인·접근 권한·시트 구조 검증을 통과하면 write가 활성화된다.
 - [ ] 저장 중 중복 클릭이 막힌다.
 - [ ] write 실패 시 성공 메시지가 보이지 않는다.
 - [ ] 네트워크 오류 시 재시도 안내가 보인다.

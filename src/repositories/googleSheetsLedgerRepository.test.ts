@@ -12,7 +12,6 @@ import {
 
 interface HarnessOptions {
   bootstrapSpreadsheetId?: string
-  testSpreadsheetId?: string
   workbooks?: WorkbookSeed[]
   stripTransactionIdsOnAppend?: boolean
   stripTransferIdsOnAppend?: boolean
@@ -20,7 +19,6 @@ interface HarnessOptions {
 
 function createHarness(options: HarnessOptions = {}) {
   const bootstrapSpreadsheetId = options.bootstrapSpreadsheetId ?? 'sheet-2026'
-  const testSpreadsheetId = options.testSpreadsheetId ?? bootstrapSpreadsheetId
   const fakeSheetsClient = new FakeSheetsClient(
     options.workbooks ?? createDefaultWorkbooks(),
     {
@@ -39,7 +37,6 @@ function createHarness(options: HarnessOptions = {}) {
     env: {
       googleClientId: 'client-id',
       bootstrapSpreadsheetId,
-      testSpreadsheetId,
     },
     tokenStore,
     sheetsClient: fakeSheetsClient as never,
@@ -853,7 +850,7 @@ describe('GoogleSheetsLedgerRepository', () => {
     expect(fakeSheetsClient.getSheetValues('sheet-2025', '1')[1]?.[4]).toBe('Food')
   })
 
-  it('allows writes to linked years but blocks missing or mismatched TEST spreadsheet ids', async () => {
+  it('allows writes to configured linked years regardless of the environment label', async () => {
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
       '88888888-8888-8888-8888-888888888888',
     )
@@ -871,41 +868,6 @@ describe('GoogleSheetsLedgerRepository', () => {
 
     expect(fakeSheetsClient.appendCalls[0]?.spreadsheetId).toBe('sheet-2025')
 
-    const missingGuardHarness = createHarness({
-      bootstrapSpreadsheetId: '',
-      workbooks: [createLedgerWorkbook({ spreadsheetId: '', year: 2026 })],
-    })
-
-    await expect(
-      missingGuardHarness.repository.appendTransaction({
-        type: 'expense',
-        date: '2026-08-18',
-        amount: 1000,
-        description: 'Guarded write',
-        account: 'Checking',
-        category: 'Food',
-      }),
-    ).rejects.toMatchObject({
-      code: 'WRITE_GUARD',
-    })
-
-    const mismatchedGuardHarness = createHarness({
-      testSpreadsheetId: 'sheet-elsewhere',
-    })
-
-    await expect(
-      mismatchedGuardHarness.repository.appendTransaction({
-        type: 'expense',
-        date: '2026-08-18',
-        amount: 1000,
-        description: 'Mismatched guard',
-        account: 'Checking',
-        category: 'Food',
-      }),
-    ).rejects.toMatchObject({
-      code: 'WRITE_GUARD',
-    })
-
     const unmarkedRootHarness = createHarness({
       workbooks: [createLedgerWorkbook({
         spreadsheetId: 'sheet-2026',
@@ -915,18 +877,15 @@ describe('GoogleSheetsLedgerRepository', () => {
     })
     await unmarkedRootHarness.repository.getYearGraph()
 
-    await expect(
-      unmarkedRootHarness.repository.appendTransaction({
-        type: 'expense',
-        date: '2026-08-18',
-        amount: 1000,
-        description: 'Unmarked root guard',
-        account: 'Checking',
-        category: 'Food',
-      }),
-    ).rejects.toMatchObject({
-      code: 'WRITE_GUARD',
+    await unmarkedRootHarness.repository.appendTransaction({
+      type: 'expense',
+      date: '2026-08-18',
+      amount: 1000,
+      description: 'Unmarked root write',
+      account: 'Checking',
+      category: 'Food',
     })
+    expect(unmarkedRootHarness.fakeSheetsClient.appendCalls).toHaveLength(1)
   })
 
   it('links a newly verified year and updates neighboring app settings', async () => {
@@ -952,7 +911,7 @@ describe('GoogleSheetsLedgerRepository', () => {
     ])
   })
 
-  it('refuses to link a workbook that is not explicitly marked as TEST', async () => {
+  it('links a workbook regardless of its environment label', async () => {
     const workbooks = createDefaultWorkbooks().map((workbook) =>
       workbook.spreadsheetId === 'sheet-2027'
         ? { ...workbook, environment: 'PRODUCTION' }
@@ -960,18 +919,14 @@ describe('GoogleSheetsLedgerRepository', () => {
     )
     const { repository, fakeSheetsClient } = createHarness({ workbooks })
 
-    await expect(
-      repository.linkYear({
-        year: 2027,
-        spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/sheet-2027/edit',
-      }),
-    ).rejects.toMatchObject({
-      code: 'WRITE_GUARD',
+    await repository.linkYear({
+      year: 2027,
+      spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/sheet-2027/edit',
     })
-    expect(fakeSheetsClient.updateCalls).toHaveLength(0)
+    expect(fakeSheetsClient.updateCalls).toHaveLength(2)
   })
 
-  it('keeps a pre-linked workbook read-only unless it is marked as TEST', async () => {
+  it('writes to a pre-linked workbook regardless of its environment label', async () => {
     const workbooks = createDefaultWorkbooks().map((workbook) =>
       workbook.spreadsheetId === 'sheet-2025'
         ? { ...workbook, environment: '' }
@@ -980,50 +935,42 @@ describe('GoogleSheetsLedgerRepository', () => {
     const { repository, fakeSheetsClient } = createHarness({ workbooks })
 
     await repository.getYearGraph()
-    await expect(
-      repository.appendTransaction({
-        type: 'expense',
-        date: '2025-12-15',
-        amount: 32000,
-        description: 'Blocked previous year edit',
-        account: 'Checking',
-        category: 'Food',
-      }),
-    ).rejects.toMatchObject({
-      code: 'WRITE_GUARD',
+    await repository.appendTransaction({
+      type: 'expense',
+      date: '2025-12-15',
+      amount: 32000,
+      description: 'Previous year edit',
+      account: 'Checking',
+      category: 'Food',
     })
-    expect(fakeSheetsClient.appendCalls).toHaveLength(0)
+    expect(fakeSheetsClient.appendCalls).toHaveLength(1)
 
-    await expect(
-      repository.updateTransaction(
-        {
-          year: 2025,
-          month: 1,
-          sourceRow: 2,
-          legacyFingerprint: {
-            date: '2025-01-03',
-            amount: -4500,
-            description: 'Previous year row',
-            account: 'Checking',
-            category: 'Food',
-          },
-        },
-        {
-          type: 'expense',
+    await repository.updateTransaction(
+      {
+        year: 2025,
+        month: 1,
+        sourceRow: 2,
+        legacyFingerprint: {
           date: '2025-01-03',
-          amount: 5000,
-          description: 'Blocked legacy edit',
+          amount: -4500,
+          description: 'Previous year row',
           account: 'Checking',
           category: 'Food',
         },
-      ),
-    ).rejects.toMatchObject({
-      code: 'WRITE_GUARD',
-    })
-    expect(fakeSheetsClient.updateCalls).toHaveLength(0)
+      },
+      {
+        type: 'expense',
+        date: '2025-01-03',
+        amount: 5000,
+        description: 'Previous year edit',
+        account: 'Checking',
+        category: 'Food',
+      },
+    )
+    expect(fakeSheetsClient.updateCalls).not.toHaveLength(0)
   })
 
-  it('preflights every neighboring write guard before linking a year', async () => {
+  it('links adjacent years regardless of neighboring environment labels', async () => {
     const workbooks = [
       ...createDefaultWorkbooks().map((workbook) =>
         workbook.spreadsheetId === 'sheet-2025'
@@ -1034,19 +981,15 @@ describe('GoogleSheetsLedgerRepository', () => {
     ]
     const { repository, fakeSheetsClient } = createHarness({ workbooks })
 
-    await expect(
-      repository.linkYear({
-        year: 2024,
-        spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/sheet-2024/edit',
-      }),
-    ).rejects.toMatchObject({
-      code: 'WRITE_GUARD',
+    await repository.linkYear({
+      year: 2024,
+      spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/sheet-2024/edit',
     })
-    expect(fakeSheetsClient.updateCalls).toHaveLength(0)
+    expect(fakeSheetsClient.updateCalls).toHaveLength(2)
     expect(
       fakeSheetsClient.getSheetValues('sheet-2024', '앱설정')
         .find((row) => row[0] === 'nextSpreadsheetId')?.[1],
-    ).toBe('')
+    ).toBe('sheet-2025')
   })
 
   it('copies previous december and its budget remainder into current month zero without reverse writes', async () => {
