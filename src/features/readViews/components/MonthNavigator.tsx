@@ -33,7 +33,7 @@ export function MonthNavigator({
           disabled={!canGoPrevious}
           aria-label={previousLabel}
         >
-          {'<'}
+          <span className="icon-button__emoji" aria-hidden="true">◀️</span>
         </button>
         <strong className="month-navigator__label" aria-live="polite">
           {formatMonthLabel(year, month)}
@@ -45,7 +45,7 @@ export function MonthNavigator({
           disabled={!canGoNext}
           aria-label={nextLabel}
         >
-          {'>'}
+          <span className="icon-button__emoji" aria-hidden="true">▶️</span>
         </button>
       </nav>
       {notice ? <p className="month-navigator__notice">{notice}</p> : null}

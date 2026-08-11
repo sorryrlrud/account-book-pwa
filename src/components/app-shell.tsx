@@ -72,9 +72,9 @@ export function AppShell() {
           aria-label={menuOpen ? '메뉴 닫기' : '메뉴 열기'}
           onClick={() => setMenuOpen((value) => !value)}
         >
-          <span />
-          <span />
-          <span />
+          <span className="icon-button__emoji" aria-hidden="true">
+            {menuOpen ? '✖️' : '☰️'}
+          </span>
         </button>
       </header>
 

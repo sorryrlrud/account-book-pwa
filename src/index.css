@@ -240,6 +240,25 @@ textarea:focus-visible {
   font-size: 1.35rem;
 }
 
+.page-intro--inline {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.page-intro--inline h2 {
+  flex: 0 0 auto;
+}
+
+.page-intro.page-intro--inline p {
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(0.68rem, 2.8vw, 0.82rem);
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
 .page-intro p,
 .panel__description,
 .empty-state,
@@ -290,12 +309,14 @@ textarea:focus-visible {
   border: 1px solid var(--color-line);
 }
 
-.icon-button span {
-  display: block;
-  width: 18px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--color-ink);
+.icon-button__emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  font-size: 1.18rem;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .icon-button--soft {
@@ -522,23 +543,30 @@ button:not(:disabled):active {
 .date-wheel__controls,
 .month-switcher {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 46px;
-  gap: 8px;
+  grid-template-columns: 42px minmax(0, calc(100% - 108px)) 42px;
+  justify-content: space-between;
+  gap: 0;
   align-items: center;
   min-width: 0;
 }
 
 .date-wheel__controls input[type='date'] {
   display: block;
+  inline-size: 100%;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   margin: 0;
+  padding-inline: 8px;
+  font-size: 0.95rem;
+  text-align: center;
+  overflow: hidden;
 }
 
 .date-wheel__controls .icon-button {
-  width: 46px;
-  min-width: 46px;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
   align-self: center;
 }
 
@@ -592,6 +620,22 @@ button:not(:disabled):active {
 
 .transaction-form {
   gap: 12px;
+}
+
+.transaction-form__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.transaction-form__heading h2,
+.transaction-form__heading .panel__description {
+  margin: 0;
+}
+
+.transaction-form__heading .panel__description {
+  white-space: nowrap;
 }
 
 .history-groups {

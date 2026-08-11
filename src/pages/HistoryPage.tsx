@@ -242,7 +242,7 @@ export function HistoryPage() {
             disabled={isLoading || !canGoPrevious}
             aria-label="이전 달"
           >
-            {'<'}
+            <span className="icon-button__emoji" aria-hidden="true">◀️</span>
           </button>
           <input
             type="month"
@@ -266,7 +266,7 @@ export function HistoryPage() {
             disabled={isLoading || !canGoNext}
             aria-label="다음 달"
           >
-            {'>'}
+            <span className="icon-button__emoji" aria-hidden="true">▶️</span>
           </button>
         </div>
 

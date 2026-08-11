@@ -279,7 +279,7 @@ export function TransactionForm({
   return (
     <form className="panel transaction-form" onSubmit={handleSubmit}>
       <div className="panel__header">
-        <div>
+        <div className="transaction-form__heading">
           <h2>{title}</h2>
           <p className="panel__description">{formatDateHeading(form.date)}</p>
         </div>
@@ -333,7 +333,7 @@ export function TransactionForm({
             disabled={isBusy}
             aria-label="하루 이전"
           >
-            {'<'}
+            <span className="icon-button__emoji" aria-hidden="true">◀️</span>
           </button>
           <input
             id={`${formId}-date`}
@@ -349,7 +349,7 @@ export function TransactionForm({
             disabled={isBusy}
             aria-label="하루 이후"
           >
-            {'>'}
+            <span className="icon-button__emoji" aria-hidden="true">▶️</span>
           </button>
         </div>
       </div>

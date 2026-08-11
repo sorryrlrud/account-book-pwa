@@ -149,7 +149,7 @@ export function EntryPage() {
 
   return (
     <section className="page">
-      <div className="page-intro">
+      <div className="page-intro page-intro--inline">
         <h2>입력</h2>
         <p>지출·수입·이체를 빠르게 Google Sheet에 기록합니다.</p>
       </div>
