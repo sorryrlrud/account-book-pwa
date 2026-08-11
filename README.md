@@ -146,6 +146,10 @@ https://sorryrlrud.github.io
 
 ## PWA and mobile verification
 
+Sites 운영 배포도 동일한 `VITE_GOOGLE_CLIENT_ID`와
+`VITE_BOOTSTRAP_SPREADSHEET_ID`를 빌드 시점에 포함해야 합니다. Sites에서는
+`VITE_BASE_PATH=/`를 사용합니다.
+
 실제 설치/기기 검증은 외부 환경이 필요하므로 로컬 CI만으로 완료되지 않습니다. 체크리스트는 [docs/live-test-checklist.md](./docs/live-test-checklist.md)를 사용하세요.
 
 최소 수동 검증 대상:
