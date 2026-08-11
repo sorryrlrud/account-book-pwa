@@ -353,7 +353,7 @@ describe('GoogleSheetsLedgerRepository', () => {
     expect(fakeSheetsClient.appendCalls).toHaveLength(1)
     expect(fakeSheetsClient.appendCalls[0]).toMatchObject({
       spreadsheetId: 'sheet-2026',
-      range: buildRange('8', 'A:Z'),
+      range: buildRange('8', 'A:E'),
     })
     expect(fakeSheetsClient.appendCalls[0]?.values[0]).toEqual([
       '2026-08-15',
@@ -361,10 +361,16 @@ describe('GoogleSheetsLedgerRepository', () => {
       'Lunch set',
       'Checking',
       'Food',
-      ...new Array<string>(18).fill(''),
-      'expense',
-      'txn_11111111111111111111111111111111',
-      '',
+    ])
+    expect(fakeSheetsClient.batchUpdateValuesCalls[0]?.data).toEqual([
+      {
+        range: expect.stringMatching(/'8'!X\d+:Z\d+/),
+        values: [[
+          'expense',
+          'txn_11111111111111111111111111111111',
+          '',
+        ]],
+      },
     ])
     expect(saved.transaction).toMatchObject({
       type: 'expense',
@@ -483,10 +489,6 @@ describe('GoogleSheetsLedgerRepository', () => {
         'Split reserve',
         'Checking',
         '',
-        ...new Array<string>(18).fill(''),
-        'transfer',
-        '',
-        'trf_22222222222222222222222222222222',
       ],
       [
         '2026-08-16',
@@ -494,13 +496,19 @@ describe('GoogleSheetsLedgerRepository', () => {
         'Split reserve',
         'Savings',
         '',
-        ...new Array<string>(18).fill(''),
-        'transfer',
-        '',
-        'trf_22222222222222222222222222222222',
       ],
     ])
-    expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(0)
+    expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(1)
+    expect(fakeSheetsClient.batchUpdateValuesCalls[0]?.data).toEqual([
+      {
+        range: expect.stringMatching(/'8'!X\d+:Z\d+/),
+        values: [['transfer', '', 'trf_22222222222222222222222222222222']],
+      },
+      {
+        range: expect.stringMatching(/'8'!X\d+:Z\d+/),
+        values: [['transfer', '', 'trf_22222222222222222222222222222222']],
+      },
+    ])
     expect(saved.transaction.transferId).toBe('trf_22222222222222222222222222222222')
     expect(saved.relatedTransaction?.transferId).toBe('trf_22222222222222222222222222222222')
     expect(saved.transaction).toMatchObject({
@@ -548,7 +556,7 @@ describe('GoogleSheetsLedgerRepository', () => {
     const transactions = await repository.getMonthTransactions(2026, 8)
     const broken = transactions.filter((transaction) => transaction.description === 'Broken transfer')
     expect(broken).toHaveLength(2)
-    expect(broken.every((transaction) => transaction.type === 'transfer')).toBe(true)
+    expect(broken.every((transaction) => transaction.type === 'unknown')).toBe(true)
     expect(broken.every((transaction) => transaction.metadataMissing)).toBe(true)
     expect(broken.every((transaction) => transaction.transferId === undefined)).toBe(true)
   })

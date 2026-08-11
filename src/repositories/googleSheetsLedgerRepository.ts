@@ -218,8 +218,8 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
     const response = await this.#sheetsClient.appendValues(
       config.spreadsheetId,
-      buildRange(String(month), 'A:Z'),
-      appendRows.rows,
+      buildRange(String(month), 'A:E'),
+      appendRows.rows.map((row) => row.slice(0, 5)),
     )
 
     const rowNumbers = this.#extractAppendedRowNumbers(response, appendRows.rows.length)

@@ -11,15 +11,27 @@ import type {
   TransactionFormSubmitPayload,
 } from '@/features/transactions/types.ts'
 
+function isSameDraft(
+  left: TransactionFormSubmitPayload['draft'],
+  right: TransactionFormSubmitPayload['draft'],
+) {
+  return (
+    left.type === right.type &&
+    left.date === right.date &&
+    left.amount === right.amount &&
+    left.description === right.description &&
+    left.account === right.account &&
+    left.category === right.category &&
+    left.destinationAccount === right.destinationAccount
+  )
+}
+
 export function EntryPage() {
   const service = useAppService()
   const { accounts, categories } = useReferenceData()
   const [isSaving, setIsSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
-  const [retryPayload, setRetryPayload] = useState<TransactionFormSubmitPayload | null>(
-    null,
-  )
   const [recentSaved, setRecentSaved] = useState<Transaction | null>(null)
   const [formResetState, setFormResetState] = useState<TransactionFormState | null>(null)
   const [formPreview, setFormPreview] = useState<TransactionFormState | null>(null)
@@ -28,6 +40,7 @@ export function EntryPage() {
     remaining: number
   } | null>(null)
   const savingRef = useRef(false)
+  const failedRequestRef = useRef<TransactionFormSubmitPayload | null>(null)
 
   useEffect(() => {
     let active = true
@@ -92,31 +105,38 @@ export function EntryPage() {
       return
     }
 
+    const failedRequest = failedRequestRef.current
     const requestPayload: TransactionFormSubmitPayload = payload.draft.clientRequestId
       ? payload
-      : {
-          ...payload,
-          draft: {
-            ...payload.draft,
-            clientRequestId: crypto.randomUUID(),
-          },
-        }
+      : failedRequest && isSameDraft(failedRequest.draft, payload.draft)
+        ? {
+            ...payload,
+            draft: failedRequest.draft,
+          }
+        : {
+            ...payload,
+            draft: {
+              ...payload.draft,
+              clientRequestId: crypto.randomUUID(),
+            },
+          }
     savingRef.current = true
     setIsSaving(true)
     setErrorMessage('')
     setStatusMessage('저장 요청을 보내는 중입니다.')
-    setRetryPayload(requestPayload)
 
     try {
       const result = await service.saveTransaction(requestPayload.draft)
       setRecentSaved(result.transaction)
       setFormResetState(payload.resetState)
-      setRetryPayload(null)
+      failedRequestRef.current = null
       setStatusMessage('저장이 완료되었습니다.')
     } catch (error) {
       setStatusMessage('')
       if (isAppError(error) && error.code === 'TRANSFER_INTEGRITY') {
-        setRetryPayload(null)
+        failedRequestRef.current = null
+      } else {
+        failedRequestRef.current = requestPayload
       }
       setErrorMessage(
         error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.',
@@ -148,27 +168,6 @@ export function EntryPage() {
         onStateChange={handleFormStateChange}
         onSubmit={saveEntry}
       />
-
-      {retryPayload ? (
-        <section className="panel">
-          <div className="panel__header">
-            <div>
-              <h2>재시도</h2>
-              <p className="panel__description">마지막 저장 요청을 다시 보낼 수 있습니다.</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="secondary-button secondary-button--full"
-            disabled={isSaving}
-            onClick={() => {
-              void saveEntry(retryPayload)
-            }}
-          >
-            {isSaving ? '처리 중...' : '마지막 요청 다시 저장'}
-          </button>
-        </section>
-      ) : null}
 
       <section className="panel">
         <div className="panel__header">

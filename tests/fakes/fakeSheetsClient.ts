@@ -161,7 +161,7 @@ export class FakeSheetsClient {
 
     return {
       updates: {
-        updatedRange: `'${parsed.sheetName}'!A${startRow}:Z${endRow}`,
+        updatedRange: `'${parsed.sheetName}'!${toColumnName(parsed.startColumn)}${startRow}:${toColumnName(parsed.endColumn)}${endRow}`,
         updatedRows: values.length,
       },
     }
@@ -298,6 +298,17 @@ export class FakeSheetsClient {
 
     return sheet
   }
+}
+
+function toColumnName(columnIndex: number): string {
+  let current = columnIndex + 1
+  let result = ''
+  while (current > 0) {
+    const remainder = (current - 1) % 26
+    result = String.fromCharCode(65 + remainder) + result
+    current = Math.floor((current - 1) / 26)
+  }
+  return result
 }
 
 export function createLedgerWorkbook(seed: WorkbookSeed): WorkbookSeed {
