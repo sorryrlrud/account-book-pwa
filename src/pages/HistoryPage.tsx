@@ -16,6 +16,7 @@ const DEFAULT_FILTERS: HistoryFilters = {
 }
 
 const DEFAULT_YEAR = Number(DEFAULT_FILTERS.month.slice(0, 4))
+type CategoryStatisticsType = 'expense' | 'income'
 
 export function HistoryPage() {
   const service = useAppService()
@@ -29,6 +30,7 @@ export function HistoryPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null)
+  const [categoryStatisticsType, setCategoryStatisticsType] = useState<CategoryStatisticsType>('expense')
   const [linkedYears, setLinkedYears] = useState<Set<number>>()
   const loadRequestRef = useRef(0)
   const listTransactions = service.listTransactions
@@ -137,7 +139,7 @@ export function HistoryPage() {
   const categoryStatistics = useMemo(() => {
     const totals = new Map<string, number>()
     for (const transaction of transactions) {
-      if (transaction.type !== 'expense') continue
+      if (transaction.type !== categoryStatisticsType) continue
       const category = transaction.category?.trim() || '미분류'
       totals.set(category, (totals.get(category) ?? 0) + Math.abs(transaction.amount))
     }
@@ -152,7 +154,7 @@ export function HistoryPage() {
         }))
         .sort((left, right) => right.amount - left.amount),
     }
-  }, [transactions])
+  }, [categoryStatisticsType, transactions])
 
   const handleRefresh = () => {
     void loadTransactions(filters)
@@ -296,9 +298,26 @@ export function HistoryPage() {
           <div>
             <h2 id="category-statistics-title">카테고리 통계</h2>
             <p className="panel__description">
-              월 지출 합계 {formatKrw(categoryStatistics.total)}
+              월 {categoryStatisticsType === 'expense' ? '지출' : '수입'} 합계 {formatKrw(categoryStatistics.total)}
             </p>
           </div>
+        </div>
+        <div className="segmented category-statistics__tabs" role="tablist" aria-label="카테고리 통계 유형">
+          {([
+            ['expense', '지출'],
+            ['income', '수입'],
+          ] as const).map(([type, label]) => (
+            <button
+              key={type}
+              type="button"
+              role="tab"
+              aria-selected={categoryStatisticsType === type}
+              className={`segmented__button${categoryStatisticsType === type ? ' is-active' : ''}`}
+              onClick={() => setCategoryStatisticsType(type)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         {categoryStatistics.items.length ? (
           <div className="category-statistics__list">
@@ -310,7 +329,7 @@ export function HistoryPage() {
                 </div>
                 <div className="category-statistics__track" aria-hidden="true">
                   <div
-                    className="category-statistics__value"
+                    className={`category-statistics__value category-statistics__value--${categoryStatisticsType}`}
                     style={{ width: `${item.ratio}%` }}
                   />
                 </div>
@@ -318,7 +337,9 @@ export function HistoryPage() {
             ))}
           </div>
         ) : (
-          <p className="empty-state">이 달의 지출 통계가 없습니다.</p>
+          <p className="empty-state">
+            이 달의 {categoryStatisticsType === 'expense' ? '지출' : '수입'} 통계가 없습니다.
+          </p>
         )}
       </section>
 

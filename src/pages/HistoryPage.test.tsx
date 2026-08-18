@@ -18,6 +18,18 @@ function renderHistory(overrides: Partial<AppService> = {}) {
       sourceMonth: 8,
       sourceRow: 2,
     },
+    {
+      id: 'income-1',
+      type: 'income',
+      date: '2026-08-10',
+      amount: 3_000_000,
+      description: '월급',
+      account: '생활비 카드',
+      category: '급여',
+      sourceYear: 2026,
+      sourceMonth: 8,
+      sourceRow: 3,
+    },
   ])
   const service: AppService = {
     ...defaultAppService,
@@ -72,6 +84,20 @@ describe('HistoryPage', () => {
     expect(screen.getByText(/₩12,500 · 100%/)).toBeVisible()
     expect(statistics.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(filters.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('switches category statistics between expenses and incomes', async () => {
+    const user = userEvent.setup()
+    renderHistory()
+
+    expect(await screen.findByText('월 지출 합계 ₩12,500')).toBeVisible()
+    expect(screen.getByText('₩12,500 · 100%')).toBeVisible()
+
+    await user.click(screen.getByRole('tab', { name: '수입' }))
+
+    expect(screen.getByText('월 수입 합계 ₩3,000,000')).toBeVisible()
+    expect(screen.getByText('₩3,000,000 · 100%')).toBeVisible()
+    expect(screen.getByRole('tab', { name: '수입' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('filters the loaded month locally without another Sheets request', async () => {
