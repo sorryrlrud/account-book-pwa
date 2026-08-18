@@ -1015,7 +1015,6 @@ button:not(:disabled):active {
   background: var(--color-danger);
 }
 
-.budget-group-card__summary,
 .budget-group-card__details {
   min-width: 0;
   display: grid;
@@ -1023,43 +1022,16 @@ button:not(:disabled):active {
   margin: 0;
 }
 
-.budget-group-card__summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
 .budget-group-card__details {
   padding-top: 11px;
   border-top: 1px solid #edf0eb;
 }
 
-.budget-group-card__summary > div,
 .budget-group-card__details > div {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
-}
-
-.budget-group-card__summary > div {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 3px;
-}
-
-.budget-group-card__summary dt,
-.budget-group-card__summary dd {
-  text-align: left;
-}
-
-.budget-group-card__summary dt {
-  font-size: 0.74rem;
-}
-
-.budget-group-card__summary dd {
-  overflow-wrap: anywhere;
-  font-size: 0.84rem;
-  font-weight: 700;
 }
 
 .budget-group-card dt {

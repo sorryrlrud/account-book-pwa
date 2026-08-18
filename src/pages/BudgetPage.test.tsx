@@ -87,4 +87,55 @@ describe('BudgetPage', () => {
     expect(screen.getByText('상세 및 편집 · 조정')).toBeVisible()
     expect(screen.getByRole('button', { name: '이월 금액 초기화' })).toBeVisible()
   })
+
+  it('fills the bar by the remaining ratio and combines usage amounts below it', () => {
+    const { container } = render(
+      <BudgetPage
+        year={2026}
+        month={8}
+        groups={[GROUP]}
+        adjustmentDraft={{ groupName: '', amount: '' }}
+        onPreviousMonth={vi.fn()}
+        onNextMonth={vi.fn()}
+        onAdjustmentDraftChange={vi.fn()}
+        onSubmitAdjustment={vi.fn()}
+        onRequestResetCarryOver={vi.fn()}
+      />,
+    )
+
+    expect(container.querySelector('.budget-group-card__progress-value')).toHaveStyle({
+      width: '60%',
+    })
+    expect(screen.getByText('40% 사용 (440,000 / 1,100,000원)')).toBeVisible()
+    expect(screen.queryByText('전체')).not.toBeInTheDocument()
+  })
+
+  it('shows a full remaining bar when none of the available budget was used', () => {
+    const unusedGroup: BudgetGroupView = {
+      ...GROUP,
+      monthly: {
+        ...GROUP.monthly,
+        spent: 0,
+        remaining: 1_100_000,
+      },
+    }
+    const { container } = render(
+      <BudgetPage
+        year={2026}
+        month={8}
+        groups={[unusedGroup]}
+        adjustmentDraft={{ groupName: '', amount: '' }}
+        onPreviousMonth={vi.fn()}
+        onNextMonth={vi.fn()}
+        onAdjustmentDraftChange={vi.fn()}
+        onSubmitAdjustment={vi.fn()}
+        onRequestResetCarryOver={vi.fn()}
+      />,
+    )
+
+    expect(container.querySelector('.budget-group-card__progress-value')).toHaveStyle({
+      width: '100%',
+    })
+    expect(screen.getByText('0% 사용 (0 / 1,100,000원)')).toBeVisible()
+  })
 })

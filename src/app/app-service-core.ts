@@ -100,7 +100,12 @@ export interface AppService extends AppServiceState {
   resetBudget(year: number, month: number, groupName: string): Promise<void>
   getSettingsData(year: number): Promise<SettingsData>
   createBudgetGroup(year: number, input: BudgetGroupMutation): Promise<BudgetGroup>
-  updateBudgetGroupBase(year: number, name: string, baseMonthlyBudget: number): Promise<void>
+  updateBudgetGroupBase(
+    year: number,
+    effectiveFromMonth: number,
+    name: string,
+    baseMonthlyBudget: number,
+  ): Promise<void>
   createAccount(year: number, input: AccountMutation): Promise<Account>
   renameAccount(year: number, previousName: string, nextName: string): Promise<void>
   disableAccount(year: number, name: string): Promise<void>

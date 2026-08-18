@@ -18,12 +18,18 @@ function clampPercent(value: number): number {
 }
 
 export function BudgetGroupCard({ item, expanded = false, onSelect, children }: BudgetGroupCardProps) {
+  const availableBudget = item.monthly.effectiveBudget
   const spentRatio =
-    item.monthly.effectiveBudget <= 0
+    availableBudget <= 0
       ? (item.monthly.spent > 0 ? 100 : 0)
-      : (item.monthly.spent / item.monthly.effectiveBudget) * 100
-  const progressWidth = `${clampPercent(spentRatio)}%`
-  const progressLabel = Math.max(0, Math.round(spentRatio))
+      : (item.monthly.spent / availableBudget) * 100
+  const remainingRatio =
+    availableBudget <= 0
+      ? 0
+      : (item.monthly.remaining / availableBudget) * 100
+  const progressWidth = `${clampPercent(remainingRatio)}%`
+  const spentPercent = Math.max(0, Math.round(spentRatio))
+  const progressLabel = `${spentPercent}% 사용 (${formatCurrency(item.monthly.spent).replace(/원$/, '')} / ${formatCurrency(availableBudget)})`
   const isOverBudget = item.monthly.remaining < 0
 
   return (
@@ -45,19 +51,13 @@ export function BudgetGroupCard({ item, expanded = false, onSelect, children }: 
 
         <div
           className="budget-group-card__progress"
-          aria-label={`${item.group.name} 예산 진행률`}
+          aria-label={`${item.group.name} 잔여 예산 ${Math.round(clampPercent(remainingRatio))}%`}
         >
           <div className="budget-group-card__progress-track" aria-hidden="true">
             <div className="budget-group-card__progress-value" style={{ width: progressWidth }} />
           </div>
-          <span className="budget-group-card__progress-label">{progressLabel}% 사용</span>
+          <span className="budget-group-card__progress-label">{progressLabel}</span>
         </div>
-
-        <dl className="budget-group-card__summary">
-          <div><dt>사용</dt><dd>{formatCurrency(item.monthly.spent)}</dd></div>
-          <div><dt>남음</dt><dd>{formatSignedCurrency(item.monthly.remaining)}</dd></div>
-          <div><dt>전체</dt><dd>{formatCurrency(item.monthly.effectiveBudget)}</dd></div>
-        </dl>
       </button>
 
       {expanded ? (

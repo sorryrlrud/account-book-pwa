@@ -568,11 +568,12 @@ export class AppServiceController {
 
   async updateBudgetGroupBase(
     year: number,
+    effectiveFromMonth: number,
     name: string,
     baseMonthlyBudget: number,
   ): Promise<void> {
     await this.#withRepository((repository) =>
-      repository.updateBudgetGroupBase(year, name, baseMonthlyBudget),
+      repository.updateBudgetGroupBase(year, effectiveFromMonth, name, baseMonthlyBudget),
     )
   }
 

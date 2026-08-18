@@ -40,7 +40,12 @@ export interface LedgerRepository {
   disableCategory(year: number, name: string): Promise<void>
   getBudgetGroups(year: number): Promise<BudgetGroup[]>
   createBudgetGroup(year: number, input: BudgetGroupMutation): Promise<BudgetGroup>
-  updateBudgetGroupBase(year: number, name: string, baseMonthlyBudget: number): Promise<void>
+  updateBudgetGroupBase(
+    year: number,
+    effectiveFromMonth: number,
+    name: string,
+    baseMonthlyBudget: number,
+  ): Promise<void>
   getMonthlyBudgetSources(year: number): Promise<MonthlyBudgetSource[]>
   getMonthlyBudgets(year: number, month: number): Promise<MonthlyBudget[]>
   updateBudgetAdjustment(year: number, month: number, groupName: string, adjustment: number): Promise<void>

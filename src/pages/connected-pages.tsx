@@ -235,7 +235,12 @@ export function ConnectedBudgetPage() {
     setError('')
     setIsMutating(true)
     try {
-      await service.updateBudgetGroupBase(selection.year, draft.groupName, baseBudgetAmount)
+      await service.updateBudgetGroupBase(
+        selection.year,
+        selection.month,
+        draft.groupName,
+        baseBudgetAmount,
+      )
       await load()
       setStatus('기준 월예산을 변경했습니다.')
     } catch (saveError) {
@@ -301,7 +306,7 @@ export function ConnectedBudgetPage() {
         baseBudgetConfirmation={confirmBaseBudget ? {
           open: true,
           title: '기준 월예산을 변경할까요?',
-          description: `${draft.groupName}의 이후 월별 기준값을 ${baseBudgetAmount.toLocaleString('ko-KR')}원으로 변경합니다. 저장된 월별 스냅샷은 유지됩니다.`,
+          description: `${draft.groupName}의 ${selection.month}월부터 12월까지 기준값을 ${baseBudgetAmount.toLocaleString('ko-KR')}원으로 변경합니다. 이전 월의 기준값과 모든 수동조정은 유지됩니다.`,
           confirmLabel: '변경',
           busy: isMutating,
           onConfirm: () => { void applyBaseBudget() },
