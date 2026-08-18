@@ -1,5 +1,4 @@
 import { MonthNavigator } from '@/features/readViews/components/MonthNavigator'
-import { SummaryCard } from '@/features/readViews/components/SummaryCard'
 import { BudgetGroupCard } from '@/features/budgets/components/BudgetGroupCard'
 import type {
   BudgetAdjustmentConfirmation,
@@ -86,8 +85,7 @@ export default function BudgetPage({
   onSubmitAdjustment,
   onRequestResetCarryOver,
 }: BudgetPageProps) {
-  const selectedGroup =
-    groups.find((group) => group.group.name === selectedGroupName) ?? groups[0]
+  const selectedGroup = groups.find((group) => group.group.name === selectedGroupName)
   const parsedAdjustment = Number(adjustmentDraft.amount.replaceAll(',', ''))
   const adjustmentChanged = Boolean(
     selectedGroup &&
@@ -119,74 +117,68 @@ export default function BudgetPage({
       </header>
 
       <section className="budget-page__groups" aria-label="예산 그룹 목록">
-        {groups.map((group) => (
-          <BudgetGroupCard
-            key={group.group.name}
-            item={group}
-            selected={group.group.name === selectedGroup?.group.name}
-            onSelect={onSelectGroup}
-          />
-        ))}
-      </section>
-
-      <SummaryCard
-        title="조정 및 이월 초기화"
-        description="선택한 그룹에 조정 금액을 반영하거나 현재 이월 금액을 0으로 초기화할 수 있습니다."
-      >
-        {selectedGroup ? (
-          <div className="budget-page__editor">
-            <p className="budget-page__selected-group">
-              선택 그룹: <strong>{selectedGroup.group.name}</strong>
-            </p>
-            <label className="field budget-page__field">
-              <span>이번 달 수동조정</span>
-              <input
-                type="text"
-                inputMode="text"
-                autoComplete="off"
-                placeholder="예: -300000"
-                value={adjustmentDraft.amount}
-                onChange={(event) =>
-                  onAdjustmentDraftChange({
-                    ...adjustmentDraft,
-                    amount: event.target.value,
-                  })
-                }
-                className="budget-page__input budget-page__input--amount"
-                disabled={isBusy || !canWrite}
-              />
-            </label>
-            <p className="budget-page__field-help">
-              현재 저장된 수동조정 금액을 새 값으로 교체합니다. 조정을 없애려면 0을 입력하세요.
-            </p>
-            {adjustmentError ? (
-              <p className="form-error budget-page__error" role="alert">
-                {adjustmentError}
-              </p>
-            ) : null}
-            {!canWrite ? (
-              <p className="form-status">Google 로그인과 Sheet 접근 확인이 완료되면 예산을 변경할 수 있습니다.</p>
-            ) : null}
-            <div className="budget-page__actions">
-              <button type="button" className="primary-button" onClick={onSubmitAdjustment} disabled={isBusy || !canWrite || !adjustmentChanged}>
-                조정 적용 확인
-              </button>
-              <button
-                type="button"
-                onClick={() => onRequestResetCarryOver(selectedGroup.group.name)}
-                className="secondary-button"
-                disabled={isBusy || !canWrite || selectedGroup.monthly.carryOver === 0}
-              >
-                이월 금액 초기화
-              </button>
-            </div>
-          </div>
-        ) : (
+        {groups.length ? groups.map((group) => {
+          const expanded = group.group.name === selectedGroup?.group.name
+          return (
+            <BudgetGroupCard
+              key={group.group.name}
+              item={group}
+              expanded={expanded}
+              onSelect={onSelectGroup}
+            >
+              {expanded ? (
+                <div className="budget-page__editor">
+                  <h4 className="budget-page__editor-title">상세 및 편집 · 조정</h4>
+                  <label className="field budget-page__field">
+                    <span>이번 달 수동조정</span>
+                    <input
+                      type="text"
+                      inputMode="text"
+                      autoComplete="off"
+                      placeholder="예: -300000"
+                      value={adjustmentDraft.amount}
+                      onChange={(event) =>
+                        onAdjustmentDraftChange({
+                          ...adjustmentDraft,
+                          amount: event.target.value,
+                        })
+                      }
+                      className="budget-page__input budget-page__input--amount"
+                      disabled={isBusy || !canWrite}
+                    />
+                  </label>
+                  <p className="budget-page__field-help">
+                    저장된 수동조정 금액을 새 값으로 교체합니다. 조정을 없애려면 0을 입력하세요.
+                  </p>
+                  {adjustmentError ? (
+                    <p className="form-error budget-page__error" role="alert">{adjustmentError}</p>
+                  ) : null}
+                  {!canWrite ? (
+                    <p className="form-status">Google 로그인과 Sheet 접근 확인이 완료되면 예산을 변경할 수 있습니다.</p>
+                  ) : null}
+                  <div className="budget-page__actions">
+                    <button type="button" className="primary-button" onClick={onSubmitAdjustment} disabled={isBusy || !canWrite || !adjustmentChanged}>
+                      조정 적용 확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRequestResetCarryOver(group.group.name)}
+                      className="secondary-button"
+                      disabled={isBusy || !canWrite || group.monthly.carryOver === 0}
+                    >
+                      이월 금액 초기화
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </BudgetGroupCard>
+          )
+        }) : (
           <p className="budget-page__empty" role="status">
             표시할 예산 그룹이 없습니다.
           </p>
         )}
-      </SummaryCard>
+      </section>
 
       {renderConfirmation(adjustmentConfirmation)}
       {renderConfirmation(resetConfirmation)}

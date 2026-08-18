@@ -62,6 +62,18 @@ function renderHistory(overrides: Partial<AppService> = {}) {
 }
 
 describe('HistoryPage', () => {
+  it('shows category statistics before filters and monthly details', async () => {
+    renderHistory()
+
+    const statistics = await screen.findByRole('heading', { name: '카테고리 통계' })
+    const filters = screen.getByRole('heading', { name: '필터링 및 검색' })
+    const details = screen.getByRole('heading', { name: '월별 내역' })
+
+    expect(screen.getByText(/₩12,500 · 100%/)).toBeVisible()
+    expect(statistics.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(filters.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('filters the loaded month locally without another Sheets request', async () => {
     const user = userEvent.setup()
     const { listTransactions } = renderHistory()

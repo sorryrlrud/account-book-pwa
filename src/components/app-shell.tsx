@@ -56,27 +56,43 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div>
-          <p className="app-header__eyebrow">ACCOUNT BOOK</p>
-          <div className="app-header__title-row">
-            <h1 className="app-header__title">모바일 가계부</h1>
-            <span className="app-header__version">{__APP_VERSION__}</span>
+      <div className="app-topbar">
+        <header className="app-header">
+          <div>
+            <p className="app-header__eyebrow">ACCOUNT BOOK</p>
+            <div className="app-header__title-row">
+              <h1 className="app-header__title">모바일 가계부</h1>
+              <span className="app-header__version">{__APP_VERSION__}</span>
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          className="icon-button"
-          aria-expanded={menuOpen}
-          aria-controls="app-menu-panel"
-          aria-label={menuOpen ? '메뉴 닫기' : '메뉴 열기'}
-          onClick={() => setMenuOpen((value) => !value)}
-        >
-          <span className="icon-button__emoji" aria-hidden="true">
-            {menuOpen ? '✖️' : '☰️'}
-          </span>
-        </button>
-      </header>
+          <button
+            type="button"
+            className="icon-button"
+            aria-expanded={menuOpen}
+            aria-controls="app-menu-panel"
+            aria-label={menuOpen ? '메뉴 닫기' : '메뉴 열기'}
+            onClick={() => setMenuOpen((value) => !value)}
+          >
+            <span className="icon-button__emoji" aria-hidden="true">
+              {menuOpen ? '✖️' : '☰️'}
+            </span>
+          </button>
+        </header>
+
+        <nav className="primary-tabs" aria-label="주요 페이지">
+          {BOTTOM_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `primary-tabs__link${isActive ? ' is-active' : ''}`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
 
       <aside
         id="app-menu-panel"
@@ -155,19 +171,6 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      <nav className="bottom-nav" aria-label="하단 내비게이션">
-        {BOTTOM_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              `bottom-nav__link${isActive ? ' is-active' : ''}`
-            }
-          >
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
     </div>
   )
 }

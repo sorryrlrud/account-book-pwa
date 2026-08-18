@@ -160,7 +160,7 @@ export function ConnectedBudgetPage() {
       setSelectedGroupName((current) => {
         const nextSelected = nextGroups.some((group) => group.group.name === current)
           ? current
-          : (nextGroups[0]?.group.name ?? '')
+          : ''
         const selected = nextGroups.find((group) => group.group.name === nextSelected)
         setDraft({
           groupName: nextSelected,
@@ -275,11 +275,12 @@ export function ConnectedBudgetPage() {
         onPreviousMonth={() => monthControl.shift(-1)}
         onNextMonth={() => monthControl.shift(1)}
         onSelectGroup={(groupName) => {
-          setSelectedGroupName(groupName)
+          const nextGroupName = selectedGroupName === groupName ? '' : groupName
+          setSelectedGroupName(nextGroupName)
           const selected = groups.find((group) => group.group.name === groupName)
           setDraft({
-            groupName,
-            amount: selected ? String(selected.monthly.adjustment) : '',
+            groupName: nextGroupName,
+            amount: nextGroupName && selected ? String(selected.monthly.adjustment) : '',
           })
         }}
         onAdjustmentDraftChange={setDraft}

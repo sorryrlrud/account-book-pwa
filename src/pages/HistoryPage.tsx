@@ -134,6 +134,26 @@ export function HistoryPage() {
     )
   }, [filteredTransactions])
 
+  const categoryStatistics = useMemo(() => {
+    const totals = new Map<string, number>()
+    for (const transaction of transactions) {
+      if (transaction.type !== 'expense') continue
+      const category = transaction.category?.trim() || '미분류'
+      totals.set(category, (totals.get(category) ?? 0) + Math.abs(transaction.amount))
+    }
+    const total = [...totals.values()].reduce((sum, amount) => sum + amount, 0)
+    return {
+      total,
+      items: [...totals.entries()]
+        .map(([category, amount]) => ({
+          category,
+          amount,
+          ratio: total > 0 ? (amount / total) * 100 : 0,
+        }))
+        .sort((left, right) => right.amount - left.amount),
+    }
+  }, [transactions])
+
   const handleRefresh = () => {
     void loadTransactions(filters)
   }
@@ -213,12 +233,7 @@ export function HistoryPage() {
 
   return (
     <section className="page">
-      <div className="page-intro">
-        <h2>내역</h2>
-        <p>월별 거래를 찾고 필요한 항목을 수정할 수 있습니다.</p>
-      </div>
-
-      <section className="panel">
+      <section className="panel history-month-panel">
         <div className="panel__header">
           <div>
             <h2>{formatMonthLabel(filters.month)}</h2>
@@ -272,6 +287,48 @@ export function HistoryPage() {
 
         {boundaryNotice ? <p className="month-navigator__notice">{boundaryNotice}</p> : null}
 
+        {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
+        {statusMessage ? <p className="form-status">{statusMessage}</p> : null}
+      </section>
+
+      <section className="panel category-statistics" aria-labelledby="category-statistics-title">
+        <div className="panel__header">
+          <div>
+            <h2 id="category-statistics-title">카테고리 통계</h2>
+            <p className="panel__description">
+              월 지출 합계 {formatKrw(categoryStatistics.total)}
+            </p>
+          </div>
+        </div>
+        {categoryStatistics.items.length ? (
+          <div className="category-statistics__list">
+            {categoryStatistics.items.map((item) => (
+              <div className="category-statistics__item" key={item.category}>
+                <div className="category-statistics__heading">
+                  <strong>{item.category}</strong>
+                  <span>{formatKrw(item.amount)} · {Math.round(item.ratio)}%</span>
+                </div>
+                <div className="category-statistics__track" aria-hidden="true">
+                  <div
+                    className="category-statistics__value"
+                    style={{ width: `${item.ratio}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-state">이 달의 지출 통계가 없습니다.</p>
+        )}
+      </section>
+
+      <section className="panel history-filter-panel">
+        <div className="panel__header">
+          <div>
+            <h2>필터링 및 검색</h2>
+            <p className="panel__description">월별 상세 내역에서 원하는 거래를 찾습니다.</p>
+          </div>
+        </div>
         <div className="compact-filters">
           <label className="field">
             <span>검색</span>
@@ -335,8 +392,6 @@ export function HistoryPage() {
           </label>
         </div>
 
-        {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
-        {statusMessage ? <p className="form-status">{statusMessage}</p> : null}
       </section>
 
       {editing ? (
