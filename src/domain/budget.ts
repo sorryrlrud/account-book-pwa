@@ -8,6 +8,11 @@ export interface BudgetGroup {
   order: number
 }
 
+export interface BudgetGroupMutation {
+  name: string
+  baseMonthlyBudget: number
+}
+
 export interface MonthlyBudgetSource {
   month: number
   groupName: string

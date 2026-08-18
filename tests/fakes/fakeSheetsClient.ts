@@ -70,6 +70,7 @@ export class FakeSheetsClient {
   readonly updateCalls: UpdateCall[] = []
   readonly batchUpdateValuesCalls: BatchUpdateValuesCall[] = []
   readonly batchUpdateCalls: BatchUpdateCall[] = []
+  readonly batchGetValuesCalls: Array<{ spreadsheetId: string; ranges: string[] }> = []
 
   readonly #spreadsheets = new Map<string, SpreadsheetState>()
   readonly #options: FakeSheetsClientOptions
@@ -127,6 +128,7 @@ export class FakeSheetsClient {
     spreadsheetId: string,
     ranges: string[],
   ): Promise<{ valueRanges: SheetsValueRange[] }> {
+    this.batchGetValuesCalls.push({ spreadsheetId, ranges: [...ranges] })
     return {
       valueRanges: await Promise.all(ranges.map((range) => this.getValues(spreadsheetId, range))),
     }

@@ -15,9 +15,11 @@ export interface BudgetPageProps {
   groups: BudgetGroupView[]
   selectedGroupName?: string
   adjustmentDraft: BudgetAdjustmentDraft
+  baseBudgetDraft?: string
   adjustmentError?: string
   adjustmentConfirmation?: BudgetAdjustmentConfirmation
   resetConfirmation?: BudgetAdjustmentConfirmation
+  baseBudgetConfirmation?: BudgetAdjustmentConfirmation
   isBusy?: boolean
   canWrite?: boolean
   monthNotice?: string
@@ -25,6 +27,8 @@ export interface BudgetPageProps {
   onNextMonth: () => void
   onSelectGroup?: (groupName: string) => void
   onAdjustmentDraftChange: (draft: BudgetAdjustmentDraft) => void
+  onBaseBudgetDraftChange?: (amount: string) => void
+  onSubmitBaseBudget?: () => void
   onSubmitAdjustment: () => void
   onRequestResetCarryOver: (groupName: string) => void
 }
@@ -72,9 +76,11 @@ export default function BudgetPage({
   groups,
   selectedGroupName,
   adjustmentDraft,
+  baseBudgetDraft = '',
   adjustmentError,
   adjustmentConfirmation,
   resetConfirmation,
+  baseBudgetConfirmation,
   isBusy = false,
   canWrite = true,
   monthNotice,
@@ -82,6 +88,8 @@ export default function BudgetPage({
   onNextMonth,
   onSelectGroup,
   onAdjustmentDraftChange,
+  onBaseBudgetDraftChange,
+  onSubmitBaseBudget,
   onSubmitAdjustment,
   onRequestResetCarryOver,
 }: BudgetPageProps) {
@@ -92,6 +100,14 @@ export default function BudgetPage({
     adjustmentDraft.amount.trim() &&
     Number.isFinite(parsedAdjustment) &&
     parsedAdjustment !== selectedGroup.monthly.adjustment,
+  )
+  const parsedBaseBudget = Number(baseBudgetDraft.replaceAll(',', ''))
+  const baseBudgetChanged = Boolean(
+    selectedGroup &&
+    baseBudgetDraft.trim() &&
+    Number.isFinite(parsedBaseBudget) &&
+    parsedBaseBudget >= 0 &&
+    parsedBaseBudget !== selectedGroup.group.baseMonthlyBudget,
   )
 
   return (
@@ -129,6 +145,27 @@ export default function BudgetPage({
               {expanded ? (
                 <div className="budget-page__editor">
                   <h4 className="budget-page__editor-title">상세 및 편집 · 조정</h4>
+                  <label className="field budget-page__field">
+                    <span>기준 월예산</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="예: 1500000"
+                      value={baseBudgetDraft}
+                      onChange={(event) => onBaseBudgetDraftChange?.(event.target.value)}
+                      className="budget-page__input budget-page__input--amount"
+                      disabled={isBusy || !canWrite || !onBaseBudgetDraftChange}
+                    />
+                  </label>
+                  <p className="budget-page__field-help">
+                    이후 새로 생성되는 월별 예산의 기준값입니다. 이미 저장된 월별 스냅샷은 유지됩니다.
+                  </p>
+                  <div className="budget-page__actions">
+                    <button type="button" className="secondary-button" onClick={onSubmitBaseBudget} disabled={isBusy || !canWrite || !baseBudgetChanged}>
+                      기준예산 변경 확인
+                    </button>
+                  </div>
                   <label className="field budget-page__field">
                     <span>이번 달 수동조정</span>
                     <input
@@ -175,13 +212,14 @@ export default function BudgetPage({
           )
         }) : (
           <p className="budget-page__empty" role="status">
-            표시할 예산 그룹이 없습니다.
+            {isBusy ? '불러오는 중입니다.' : '표시할 예산 그룹이 없습니다.'}
           </p>
         )}
       </section>
 
       {renderConfirmation(adjustmentConfirmation)}
       {renderConfirmation(resetConfirmation)}
+      {renderConfirmation(baseBudgetConfirmation)}
     </section>
   )
 }

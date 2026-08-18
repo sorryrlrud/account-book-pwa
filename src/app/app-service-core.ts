@@ -2,6 +2,7 @@ import { createContext } from 'react'
 import type { Account, AccountMutation } from '@/domain/account.ts'
 import type {
   BudgetGroup,
+  BudgetGroupMutation,
   MonthlyBudget,
 } from '@/domain/budget.ts'
 import type { Category, CategoryMutation } from '@/domain/category.ts'
@@ -98,6 +99,8 @@ export interface AppService extends AppServiceState {
   ): Promise<void>
   resetBudget(year: number, month: number, groupName: string): Promise<void>
   getSettingsData(year: number): Promise<SettingsData>
+  createBudgetGroup(year: number, input: BudgetGroupMutation): Promise<BudgetGroup>
+  updateBudgetGroupBase(year: number, name: string, baseMonthlyBudget: number): Promise<void>
   createAccount(year: number, input: AccountMutation): Promise<Account>
   renameAccount(year: number, previousName: string, nextName: string): Promise<void>
   disableAccount(year: number, name: string): Promise<void>
@@ -194,6 +197,14 @@ class UnconfiguredAppService implements AppService {
   }
 
   async getSettingsData(): Promise<SettingsData> {
+    throw new Error(UNCONFIGURED_MESSAGE)
+  }
+
+  async createBudgetGroup(): Promise<BudgetGroup> {
+    throw new Error(UNCONFIGURED_MESSAGE)
+  }
+
+  async updateBudgetGroupBase(): Promise<void> {
     throw new Error(UNCONFIGURED_MESSAGE)
   }
 

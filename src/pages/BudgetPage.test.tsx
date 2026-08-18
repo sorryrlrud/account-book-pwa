@@ -31,6 +31,26 @@ const GROUP: BudgetGroupView = {
 }
 
 describe('BudgetPage', () => {
+  it('shows a loading message instead of the empty state while loading', () => {
+    render(
+      <BudgetPage
+        year={2026}
+        month={8}
+        groups={[]}
+        adjustmentDraft={{ groupName: '', amount: '' }}
+        isBusy
+        onPreviousMonth={vi.fn()}
+        onNextMonth={vi.fn()}
+        onAdjustmentDraftChange={vi.fn()}
+        onSubmitAdjustment={vi.fn()}
+        onRequestResetCarryOver={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('불러오는 중입니다.')).toBeVisible()
+    expect(screen.queryByText('표시할 예산 그룹이 없습니다.')).not.toBeInTheDocument()
+  })
+
   it('keeps each budget compact until its card is selected', async () => {
     const user = userEvent.setup()
     const onSelectGroup = vi.fn()

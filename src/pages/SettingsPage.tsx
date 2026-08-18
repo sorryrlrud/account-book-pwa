@@ -6,12 +6,16 @@ import type {
   SettingsYearLinkItem,
   SettingsConfirmation,
 } from '@/features/settings/types'
+import type { BudgetGroup } from '@/domain/budget.ts'
 
 export interface SettingsPageProps {
   newAccountName: string
   newCategoryName: string
   newCategoryBudgetGroup: string
+  newBudgetGroupName: string
+  newBudgetGroupBase: string
   budgetGroups: string[]
+  budgetGroupItems: BudgetGroup[]
   accounts: EditableAccount[]
   categories: EditableCategory[]
   yearLinks: SettingsYearLinkItem[]
@@ -26,6 +30,9 @@ export interface SettingsPageProps {
   onAccountDisableToggle: (accountName: string, active: boolean) => void
   onAccountRename: (accountName: string) => void
   onNewCategoryNameChange: (name: string) => void
+  onNewBudgetGroupNameChange: (name: string) => void
+  onNewBudgetGroupBaseChange: (amount: string) => void
+  onBudgetGroupCreate: () => void
   onNewCategoryBudgetGroupChange: (name: string) => void
   onCategoryDraftNameChange: (categoryName: string, draftName: string) => void
   onCategoryCreate: () => void
@@ -75,7 +82,10 @@ export default function SettingsPage({
   newAccountName,
   newCategoryName,
   newCategoryBudgetGroup,
+  newBudgetGroupName,
+  newBudgetGroupBase,
   budgetGroups,
+  budgetGroupItems,
   accounts,
   categories,
   yearLinks,
@@ -90,6 +100,9 @@ export default function SettingsPage({
   onAccountDisableToggle,
   onAccountRename,
   onNewCategoryNameChange,
+  onNewBudgetGroupNameChange,
+  onNewBudgetGroupBaseChange,
+  onBudgetGroupCreate,
   onNewCategoryBudgetGroupChange,
   onCategoryDraftNameChange,
   onCategoryCreate,
@@ -163,6 +176,51 @@ export default function SettingsPage({
                   {account.active ? '사용중지' : '사용중지됨'}
                 </button>
               </div>
+            </article>
+          ))}
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="예산 그룹 관리" description="그룹별 기본 월예산을 등록합니다. 월별 행은 조정을 저장할 때 앱이 자동으로 만듭니다.">
+        <div className="settings-page__collection">
+          <div className="settings-page__create-row">
+            <label className="field">
+              <span>새 예산 그룹 이름</span>
+              <input
+                type="text"
+                value={newBudgetGroupName}
+                onChange={(event) => onNewBudgetGroupNameChange(event.target.value)}
+                disabled={isBusy || !canWrite}
+              />
+            </label>
+            <label className="field">
+              <span>기준 월예산</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={newBudgetGroupBase}
+                onChange={(event) => onNewBudgetGroupBaseChange(event.target.value)}
+                placeholder="예: 1500000"
+                disabled={isBusy || !canWrite}
+              />
+            </label>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={onBudgetGroupCreate}
+              disabled={isBusy || !canWrite || !newBudgetGroupName.trim() || !newBudgetGroupBase.trim()}
+            >
+              추가
+            </button>
+          </div>
+          {budgetGroupItems.map((group) => (
+            <article key={group.name} className={`settings-page__item${group.active ? '' : ' is-inactive'}`}>
+              <span>
+                {group.name}
+                <small className="settings-page__item-meta">
+                  기준 월예산 · {group.baseMonthlyBudget.toLocaleString('ko-KR')}원
+                </small>
+              </span>
             </article>
           ))}
         </div>

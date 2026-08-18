@@ -837,6 +837,48 @@ describe('GoogleSheetsLedgerRepository', () => {
     ])
   })
 
+  it('loads all budget inputs in one batch request', async () => {
+    const { repository, fakeSheetsClient } = createHarness()
+
+    const budgets = await repository.getMonthlyBudgets(2026, 8)
+
+    expect(budgets.find((budget) => budget.groupName === 'Living')?.spent).toBe(36000)
+    expect(fakeSheetsClient.batchGetValuesCalls).toHaveLength(1)
+    expect(fakeSheetsClient.batchGetValuesCalls[0]?.ranges).toEqual([
+      buildRange('예산그룹', 'A:D'),
+      buildRange('카테고리', 'A:D'),
+      buildRange('예산월별', 'A:D'),
+      ...Array.from({ length: 8 }, (_, index) => buildRange(String(index + 1), 'A:Z')),
+    ])
+  })
+
+  it('creates a missing monthly budget row when its first adjustment is saved', async () => {
+    const { repository, fakeSheetsClient } = createHarness()
+
+    await repository.updateBudgetAdjustment(2026, 2, 'Living', -300000)
+
+    expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산월별').at(-1)).toEqual([
+      '2',
+      'Living',
+      '1000000',
+      '-300000',
+    ])
+  })
+
+  it('creates budget groups and updates their default monthly budget', async () => {
+    const { repository, fakeSheetsClient } = createHarness()
+
+    await repository.createBudgetGroup(2026, { name: 'Travel', baseMonthlyBudget: 250000 })
+    await repository.updateBudgetGroupBase(2026, 'Travel', 300000)
+
+    expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산그룹').at(-1)).toEqual([
+      'Travel',
+      '300000',
+      'TRUE',
+      '2',
+    ])
+  })
+
   it('renames account and category labels only on the current year months 1 through 12', async () => {
     const { repository, fakeSheetsClient } = createHarness()
     await repository.getYearGraph()

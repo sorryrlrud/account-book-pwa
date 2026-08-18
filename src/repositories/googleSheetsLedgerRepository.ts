@@ -3,6 +3,7 @@ import {
   buildBudgetTimeline,
   resetCarryOverAdjustment,
   type BudgetGroup,
+  type BudgetGroupMutation,
   type MonthlyBudget,
   type MonthlyBudgetSource,
 } from '@/domain/budget.ts'
@@ -475,6 +476,54 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     return parseBudgetGroups(range)
   }
 
+  async createBudgetGroup(year: number, input: BudgetGroupMutation): Promise<BudgetGroup> {
+    const config = await this.#resolveYearConfig(year)
+    const groups = await this.getBudgetGroups(year)
+    const name = input.name.trim()
+    if (!name) {
+      throw new AppError('VALIDATION_ERROR', '예산 그룹 이름을 입력해주세요.')
+    }
+    if (!Number.isFinite(input.baseMonthlyBudget) || input.baseMonthlyBudget < 0) {
+      throw new AppError('VALIDATION_ERROR', '기준 월예산을 확인해주세요.')
+    }
+    if (groups.some((group) => group.name === name)) {
+      throw new AppError('VALIDATION_ERROR', '같은 이름의 예산 그룹이 이미 있습니다.')
+    }
+
+    const nextOrder = Math.max(0, ...groups.map((group) => group.order)) + 1
+    await this.#sheetsClient.appendValues(config.spreadsheetId, buildRange('예산그룹', 'A:D'), [[
+      toUserEnteredLiteral(name),
+      String(input.baseMonthlyBudget),
+      'TRUE',
+      String(nextOrder),
+    ]])
+    return { name, baseMonthlyBudget: input.baseMonthlyBudget, active: true, order: nextOrder }
+  }
+
+  async updateBudgetGroupBase(
+    year: number,
+    name: string,
+    baseMonthlyBudget: number,
+  ): Promise<void> {
+    if (!Number.isFinite(baseMonthlyBudget) || baseMonthlyBudget < 0) {
+      throw new AppError('VALIDATION_ERROR', '기준 월예산을 확인해주세요.')
+    }
+    const config = await this.#resolveYearConfig(year)
+    const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산그룹', 'A:D'))
+    const rows = range.values ?? []
+    const rowIndex = rows.findIndex((row, index) => index > 0 && trimCell(row[0]) === name)
+    if (rowIndex < 0) {
+      throw new AppError('NOT_FOUND', '예산 그룹을 찾지 못했습니다.')
+    }
+    const row = [...rows[rowIndex]]
+    row[1] = String(baseMonthlyBudget)
+    await this.#sheetsClient.updateValues(
+      config.spreadsheetId,
+      buildRowRange('예산그룹', rowIndex + 1, 'A:D'),
+      [row],
+    )
+  }
+
   async getMonthlyBudgetSources(year: number): Promise<MonthlyBudgetSource[]> {
     const config = await this.#resolveYearConfig(year)
     const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D'))
@@ -482,15 +531,25 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
   }
 
   async getMonthlyBudgets(year: number, month: number): Promise<MonthlyBudget[]> {
-    const [groups, categories, monthlySources] = await Promise.all([
-      this.getBudgetGroups(year),
-      this.getCategories(year),
-      this.getMonthlyBudgetSources(year),
-    ])
+    const config = await this.#resolveYearConfig(year)
+    const ranges = [
+      buildRange('예산그룹', 'A:D'),
+      buildRange('카테고리', 'A:D'),
+      buildRange('예산월별', 'A:D'),
+      ...Array.from({ length: month }, (_, index) =>
+        buildRange(String(index + 1), MONTH_SHEET_COLUMNS)),
+    ]
+    const { valueRanges } = await this.#sheetsClient.batchGetValues(config.spreadsheetId, ranges)
+    const groups = parseBudgetGroups(valueRanges[0] ?? {})
+    const categories = parseCategories(valueRanges[1] ?? {})
+    const monthlySources = parseMonthlyBudgetSources(valueRanges[2] ?? {})
 
     const transactionsByMonth = new Map<number, Transaction[]>()
     for (let currentMonth = 1; currentMonth <= month; currentMonth += 1) {
-      transactionsByMonth.set(currentMonth, await this.getMonthTransactions(year, currentMonth))
+      const transactions = collapseTransferPairs(
+        parseTransactions(year, currentMonth, valueRanges[currentMonth + 2]?.values ?? []),
+      )
+      transactionsByMonth.set(currentMonth, transactions)
     }
 
     const monthZeroCarryOvers = this.#getMonthZeroCarryOvers(groups, monthlySources)
@@ -515,6 +574,18 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     const config = await this.#resolveYearConfig(year)
     const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D'))
     const rowNumber = this.#findBudgetSourceRow(range, month, groupName)
+    if (rowNumber === undefined) {
+      const group = (await this.getBudgetGroups(year)).find((item) => item.name === groupName)
+      if (!group) {
+        throw new AppError('NOT_FOUND', '예산 그룹을 찾지 못했습니다.')
+      }
+      await this.#sheetsClient.appendValues(
+        config.spreadsheetId,
+        buildRange('예산월별', 'A:D'),
+        [[String(month), toUserEnteredLiteral(groupName), String(group.baseMonthlyBudget), String(adjustment)]],
+      )
+      return
+    }
     await this.#sheetsClient.updateValues(
       config.spreadsheetId,
       buildRowRange('예산월별', rowNumber, 'A:D'),
@@ -1077,7 +1148,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     return sheetId
   }
 
-  #findBudgetSourceRow(range: SheetsValueRange, month: number, groupName: string): number {
+  #findBudgetSourceRow(range: SheetsValueRange, month: number, groupName: string): number | undefined {
     const rows = range.values ?? []
     const rowIndex = rows.findIndex(
       (row, index) =>
@@ -1085,11 +1156,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
         parseSheetNumber(row[0]) === month &&
         trimCell(row[1]) === groupName,
     )
-    if (rowIndex < 0) {
-      throw new AppError('NOT_FOUND', '예산월별 행을 찾지 못했습니다.')
-    }
-
-    return rowIndex + 1
+    return rowIndex < 0 ? undefined : rowIndex + 1
   }
 
   #readBaseSnapshot(range: SheetsValueRange, rowNumber: number): number {

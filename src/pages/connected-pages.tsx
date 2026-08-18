@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppService } from '@/app/use-app-service.ts'
-import type { MonthlyBudget } from '@/domain/budget.ts'
+import type { BudgetGroup, MonthlyBudget } from '@/domain/budget.ts'
 import type { SettlementSummary } from '@/domain/settlement.ts'
 import type { BudgetGroupView } from '@/features/budgets/types.ts'
 import type {
@@ -115,10 +115,12 @@ export function ConnectedBudgetPage() {
   const [groups, setGroups] = useState<BudgetGroupView[]>([])
   const [selectedGroupName, setSelectedGroupName] = useState('')
   const [draft, setDraft] = useState({ groupName: '', amount: '' })
+  const [baseBudgetDraft, setBaseBudgetDraft] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [confirmAdjustment, setConfirmAdjustment] = useState(false)
+  const [confirmBaseBudget, setConfirmBaseBudget] = useState(false)
   const [resetGroupName, setResetGroupName] = useState('')
   const [isMutating, setIsMutating] = useState(false)
   const getSettingsData = service.getSettingsData
@@ -166,6 +168,7 @@ export function ConnectedBudgetPage() {
           groupName: nextSelected,
           amount: selected ? String(selected.monthly.adjustment) : '',
         })
+        setBaseBudgetDraft(selected ? String(selected.group.baseMonthlyBudget) : '')
         return nextSelected
       })
       setStatus(nextGroups.length ? '' : '표시할 예산 그룹이 없습니다.')
@@ -186,6 +189,7 @@ export function ConnectedBudgetPage() {
   }, [load])
 
   const adjustmentAmount = Number(draft.amount.replaceAll(',', ''))
+  const baseBudgetAmount = Number(baseBudgetDraft.replaceAll(',', ''))
   const submitAdjustment = () => {
     if (!draft.groupName || !draft.amount.trim() || !Number.isFinite(adjustmentAmount)) {
       setError('예산 그룹과 조정 금액을 확인해주세요.')
@@ -213,6 +217,29 @@ export function ConnectedBudgetPage() {
           ? saveError.message
           : '예산 조정을 저장하지 못했습니다.',
       )
+    } finally {
+      setIsMutating(false)
+    }
+  }
+
+  const submitBaseBudget = () => {
+    if (!draft.groupName || !baseBudgetDraft.trim() || !Number.isFinite(baseBudgetAmount) || baseBudgetAmount < 0) {
+      setError('예산 그룹과 기준 월예산을 확인해주세요.')
+      return
+    }
+    setConfirmBaseBudget(true)
+  }
+
+  const applyBaseBudget = async () => {
+    setConfirmBaseBudget(false)
+    setError('')
+    setIsMutating(true)
+    try {
+      await service.updateBudgetGroupBase(selection.year, draft.groupName, baseBudgetAmount)
+      await load()
+      setStatus('기준 월예산을 변경했습니다.')
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : '기준 월예산을 저장하지 못했습니다.')
     } finally {
       setIsMutating(false)
     }
@@ -247,6 +274,7 @@ export function ConnectedBudgetPage() {
         groups={groups}
         selectedGroupName={selectedGroupName}
         adjustmentDraft={draft}
+        baseBudgetDraft={baseBudgetDraft}
         adjustmentError={error}
         isBusy={isLoading || isMutating}
         canWrite={service.hasWriteAccess}
@@ -270,6 +298,15 @@ export function ConnectedBudgetPage() {
           onConfirm: () => { void resetCarryOver() },
           onCancel: () => setResetGroupName(''),
         } : undefined}
+        baseBudgetConfirmation={confirmBaseBudget ? {
+          open: true,
+          title: '기준 월예산을 변경할까요?',
+          description: `${draft.groupName}의 이후 월별 기준값을 ${baseBudgetAmount.toLocaleString('ko-KR')}원으로 변경합니다. 저장된 월별 스냅샷은 유지됩니다.`,
+          confirmLabel: '변경',
+          busy: isMutating,
+          onConfirm: () => { void applyBaseBudget() },
+          onCancel: () => setConfirmBaseBudget(false),
+        } : undefined}
         canGoPrevious={monthControl.canGoPrevious && !isLoading && !isMutating}
         canGoNext={monthControl.canGoNext && !isLoading && !isMutating}
         onPreviousMonth={() => monthControl.shift(-1)}
@@ -282,8 +319,11 @@ export function ConnectedBudgetPage() {
             groupName: nextGroupName,
             amount: nextGroupName && selected ? String(selected.monthly.adjustment) : '',
           })
+          setBaseBudgetDraft(nextGroupName && selected ? String(selected.group.baseMonthlyBudget) : '')
         }}
         onAdjustmentDraftChange={setDraft}
+        onBaseBudgetDraftChange={setBaseBudgetDraft}
+        onSubmitBaseBudget={submitBaseBudget}
         onSubmitAdjustment={submitAdjustment}
         onRequestResetCarryOver={setResetGroupName}
       />
@@ -457,6 +497,7 @@ export function ConnectedSettingsPage() {
   const [accounts, setAccounts] = useState<EditableAccount[]>([])
   const [categories, setCategories] = useState<EditableCategory[]>([])
   const [budgetGroups, setBudgetGroups] = useState<string[]>([])
+  const [budgetGroupItems, setBudgetGroupItems] = useState<BudgetGroup[]>([])
   const [yearLinks, setYearLinks] = useState<Array<{
     year: number
     spreadsheetId: string
@@ -466,6 +507,8 @@ export function ConnectedSettingsPage() {
   const [newAccountName, setNewAccountName] = useState('')
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryBudgetGroup, setNewCategoryBudgetGroup] = useState('')
+  const [newBudgetGroupName, setNewBudgetGroupName] = useState('')
+  const [newBudgetGroupBase, setNewBudgetGroupBase] = useState('')
   const [yearLinkDraft, setYearLinkDraft] = useState({ year: '', spreadsheetUrl: '' })
   const [pendingAction, setPendingAction] = useState<{
     title: string
@@ -495,6 +538,7 @@ export function ConnectedSettingsPage() {
           .sort((left, right) => left.order - right.order)
           .map((group) => group.name),
       )
+      setBudgetGroupItems(data.budgetGroups)
       setYearLinks(data.linkedYears.map((linkedYear) => ({
         ...linkedYear,
         spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${linkedYear.spreadsheetId}/edit`,
@@ -574,7 +618,10 @@ export function ConnectedSettingsPage() {
         newAccountName={newAccountName}
         newCategoryName={newCategoryName}
         newCategoryBudgetGroup={newCategoryBudgetGroup}
+        newBudgetGroupName={newBudgetGroupName}
+        newBudgetGroupBase={newBudgetGroupBase}
         budgetGroups={budgetGroups}
+        budgetGroupItems={budgetGroupItems}
         accounts={accounts}
         categories={categories}
         yearLinks={yearLinks}
@@ -627,6 +674,25 @@ export function ConnectedSettingsPage() {
         }}
         onAccountRename={renameAccount}
         onNewCategoryNameChange={setNewCategoryName}
+        onNewBudgetGroupNameChange={setNewBudgetGroupName}
+        onNewBudgetGroupBaseChange={setNewBudgetGroupBase}
+        onBudgetGroupCreate={() => {
+          const name = newBudgetGroupName.trim()
+          const baseMonthlyBudget = Number(newBudgetGroupBase.replaceAll(',', ''))
+          if (!name || !Number.isFinite(baseMonthlyBudget) || baseMonthlyBudget < 0) {
+            setError('예산 그룹 이름과 기준 월예산을 확인해주세요.')
+            return
+          }
+          void runMutation(
+            () => service.createBudgetGroup(year, { name, baseMonthlyBudget }),
+            '예산 그룹을 추가했습니다.',
+          ).then((saved) => {
+            if (saved) {
+              setNewBudgetGroupName('')
+              setNewBudgetGroupBase('')
+            }
+          })
+        }}
         onNewCategoryBudgetGroupChange={setNewCategoryBudgetGroup}
         onCategoryDraftNameChange={(categoryName, draftName) => {
           setCategories((current) => current.map((category) =>
