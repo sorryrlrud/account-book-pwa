@@ -271,7 +271,10 @@ export function TransactionForm({
   }
 
   return (
-    <form className="panel transaction-form" onSubmit={handleSubmit}>
+    <form
+      className={`panel transaction-form transaction-form--${form.type}`}
+      onSubmit={handleSubmit}
+    >
       <div className="panel__header">
         <div className="transaction-form__heading">
           <h2>{title}</h2>

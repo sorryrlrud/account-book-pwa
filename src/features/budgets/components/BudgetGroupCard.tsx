@@ -19,17 +19,13 @@ function clampPercent(value: number): number {
 
 export function BudgetGroupCard({ item, expanded = false, onSelect, children }: BudgetGroupCardProps) {
   const availableBudget = item.monthly.effectiveBudget
-  const spentRatio =
-    availableBudget <= 0
-      ? (item.monthly.spent > 0 ? 100 : 0)
-      : (item.monthly.spent / availableBudget) * 100
   const remainingRatio =
     availableBudget <= 0
       ? 0
       : (item.monthly.remaining / availableBudget) * 100
   const progressWidth = `${clampPercent(remainingRatio)}%`
-  const spentPercent = Math.max(0, Math.round(spentRatio))
-  const progressLabel = `${spentPercent}% 사용 (${formatCurrency(item.monthly.spent).replace(/원$/, '')} / ${formatCurrency(availableBudget)})`
+  const remainingPercent = Math.round(clampPercent(remainingRatio))
+  const progressLabel = `${remainingPercent}% 남음 (${formatCurrency(item.monthly.remaining).replace(/원$/, '')} / ${formatCurrency(availableBudget)})`
   const isOverBudget = item.monthly.remaining < 0
 
   return (

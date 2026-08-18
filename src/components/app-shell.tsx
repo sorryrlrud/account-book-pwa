@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAppService } from '@/app/use-app-service.ts'
 import { refreshToLatestVersion } from '@/app/refresh-app.ts'
@@ -21,11 +21,17 @@ export function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [actionError, setActionError] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [refreshStatus, setRefreshStatus] = useState('')
+  const refreshStatusTimeoutRef = useRef<number | undefined>(undefined)
   const location = useLocation()
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 })
   }, [location.pathname])
+
+  useEffect(() => () => {
+    window.clearTimeout(refreshStatusTimeoutRef.current)
+  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -59,8 +65,18 @@ export function AppShell() {
   const handleRefresh = async () => {
     try {
       setActionError('')
+      window.clearTimeout(refreshStatusTimeoutRef.current)
+      setRefreshStatus('')
       setIsRefreshing(true)
-      await refreshToLatestVersion()
+      const didRefresh = await refreshToLatestVersion(__APP_VERSION__)
+      if (!didRefresh) {
+        setIsRefreshing(false)
+        setRefreshStatus('새 버전입니다')
+        refreshStatusTimeoutRef.current = window.setTimeout(
+          () => setRefreshStatus(''),
+          2_000,
+        )
+      }
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -155,7 +171,7 @@ export function AppShell() {
                   }}
                   disabled={isRefreshing}
                 >
-                  {isRefreshing ? '최신 버전 확인 중...' : '새 버전으로 새로고침'}
+                  {refreshStatus || (isRefreshing ? '최신 버전 확인 중...' : '새 버전으로 새로고침')}
                 </button>
               </li>
               <li>

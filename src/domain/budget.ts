@@ -68,7 +68,10 @@ export function calculateMonthlyBudgets(
 
   const spentByGroup = new Map<string, number>()
   for (const transaction of input.transactions) {
-    if (transaction.type !== 'expense' || !transaction.category) {
+    if (
+      (transaction.type !== 'expense' && transaction.type !== 'income') ||
+      !transaction.category
+    ) {
       continue
     }
 
@@ -78,7 +81,11 @@ export function calculateMonthlyBudgets(
     }
 
     const current = spentByGroup.get(groupName) ?? 0
-    spentByGroup.set(groupName, current + Math.abs(transaction.amount))
+    const amount = Math.abs(transaction.amount)
+    spentByGroup.set(
+      groupName,
+      current + (transaction.type === 'expense' ? amount : -amount),
+    )
   }
 
   const results: MonthlyBudget[] = []

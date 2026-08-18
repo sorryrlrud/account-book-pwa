@@ -140,7 +140,8 @@ export function HistoryPage() {
     const totals = new Map<string, number>()
     for (const transaction of transactions) {
       if (transaction.type !== categoryStatisticsType) continue
-      const category = transaction.category?.trim() || '미분류'
+      const category = transaction.category?.trim()
+      if (!category) continue
       totals.set(category, (totals.get(category) ?? 0) + Math.abs(transaction.amount))
     }
     const total = [...totals.values()].reduce((sum, amount) => sum + amount, 0)

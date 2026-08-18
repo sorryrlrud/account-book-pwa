@@ -630,6 +630,37 @@ button:not(:disabled):active {
 
 .transaction-form {
   gap: 12px;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.transaction-form--expense {
+  border-color: #ecc3c0;
+  background: #fff2f1;
+}
+
+.transaction-form--income {
+  border-color: #aebdcc;
+  background: #edf2f7;
+}
+
+.transaction-form--transfer {
+  border-color: #b8d7c9;
+  background: #eef8f2;
+}
+
+.transaction-form--expense .segmented__button.is-active {
+  border-color: #d9a3a0;
+  color: #8f2f2b;
+}
+
+.transaction-form--income .segmented__button.is-active {
+  border-color: #8fa2b5;
+  color: #203d59;
+}
+
+.transaction-form--transfer .segmented__button.is-active {
+  border-color: #8fbea8;
+  color: #1d5947;
 }
 
 .transaction-form__heading {

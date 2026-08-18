@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppService, useReferenceData } from '@/app/use-app-service.ts'
 import { formatDateHeading } from '@/features/transactions/date.ts'
-import { formatKrw } from '@/features/transactions/format.ts'
+import { formatKrw, parseAmountInput } from '@/features/transactions/format.ts'
 import { TransactionForm } from '@/features/transactions/TransactionForm.tsx'
 import type { Transaction } from '@/domain/transaction.ts'
 import { isAppError } from '@/domain/errors.ts'
@@ -47,7 +47,7 @@ export function EntryPage() {
     if (
       !service.auth.canRead ||
       !formPreview?.category ||
-      formPreview.type !== 'expense' ||
+      (formPreview.type !== 'expense' && formPreview.type !== 'income') ||
       !/^\d{4}-\d{2}-\d{2}$/.test(formPreview.date)
     ) {
       setBudgetContext(null)
@@ -88,8 +88,10 @@ export function EntryPage() {
 
   const budgetHint = (() => {
     if (!budgetContext) return ''
-    const amount = Number(formPreview?.amountInput ?? 0)
-    const remainingAfterSave = budgetContext.remaining - (Number.isFinite(amount) ? amount : 0)
+    const amount = parseAmountInput(formPreview?.amountInput ?? '')
+    const budgetChange = formPreview?.type === 'income' ? amount : -amount
+    const remainingAfterSave =
+      budgetContext.remaining + (Number.isFinite(budgetChange) ? budgetChange : 0)
     if (amount > 0) {
       return remainingAfterSave >= 0
         ? `${budgetContext.groupName} · 저장 후 ${formatKrw(remainingAfterSave)} 남음`

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { AppServiceContext, defaultAppService, type AppService } from '@/app/app-service-core.ts'
@@ -29,6 +29,17 @@ function renderHistory(overrides: Partial<AppService> = {}) {
       sourceYear: 2026,
       sourceMonth: 8,
       sourceRow: 3,
+    },
+    {
+      id: 'uncategorized-expense',
+      type: 'expense',
+      date: '2026-08-10',
+      amount: -50_000,
+      description: '카테고리 없는 지출',
+      account: '생활비 카드',
+      sourceYear: 2026,
+      sourceMonth: 8,
+      sourceRow: 4,
     },
   ])
   const service: AppService = {
@@ -82,6 +93,7 @@ describe('HistoryPage', () => {
     const details = screen.getByRole('heading', { name: '월별 내역' })
 
     expect(screen.getByText(/₩12,500 · 100%/)).toBeVisible()
+    expect(within(statistics.closest('section')!).queryByText('미분류')).not.toBeInTheDocument()
     expect(statistics.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(filters.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })

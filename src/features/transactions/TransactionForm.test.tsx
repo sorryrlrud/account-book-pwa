@@ -33,6 +33,18 @@ function renderForm(
 }
 
 describe('TransactionForm', () => {
+  it('changes the form color theme with the selected transaction type', async () => {
+    const user = userEvent.setup()
+    const { container } = renderForm()
+    const form = container.querySelector('form')
+
+    expect(form).toHaveClass('transaction-form--expense')
+    await user.click(screen.getByRole('tab', { name: '수입' }))
+    expect(form).toHaveClass('transaction-form--income')
+    await user.click(screen.getByRole('tab', { name: '이체' }))
+    expect(form).toHaveClass('transaction-form--transfer')
+  })
+
   it('retains inactive account and category values while editing an existing transaction', () => {
     const { container } = renderForm({
       accounts: ['Active account'],

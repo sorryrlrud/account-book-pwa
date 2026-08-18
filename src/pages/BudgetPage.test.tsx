@@ -109,7 +109,7 @@ describe('BudgetPage', () => {
     expect(container.querySelector('.budget-group-card__progress-value')).toHaveStyle({
       width: '60%',
     })
-    expect(screen.getByText('40% 사용 (440,000 / 1,100,000원)')).toBeVisible()
+    expect(screen.getByText('60% 남음 (660,000 / 1,100,000원)')).toBeVisible()
     expect(screen.queryByText('전체')).not.toBeInTheDocument()
   })
 
@@ -139,7 +139,7 @@ describe('BudgetPage', () => {
     expect(container.querySelector('.budget-group-card__progress-value')).toHaveStyle({
       width: '100%',
     })
-    expect(screen.getByText('0% 사용 (0 / 1,100,000원)')).toBeVisible()
+    expect(screen.getByText('100% 남음 (1,100,000 / 1,100,000원)')).toBeVisible()
   })
 
   it('accepts a one-time delta even when a different adjustment total is already stored', () => {

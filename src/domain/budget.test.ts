@@ -128,7 +128,7 @@ describe('budget domain helpers', () => {
     })
   })
 
-  it('counts only expense transactions that belong to a budget group', () => {
+  it('calculates net spending from categorized expenses and incomes', () => {
     const budgets = calculateMonthlyBudgets({
       year: 2026,
       month: 8,
@@ -137,7 +137,8 @@ describe('budget domain helpers', () => {
       monthlySources: sampleMonthlySources,
       transactions: [
         createExpenseTransaction({ amount: -24_000, category: '식비' }),
-        createIncomeTransaction(),
+        createIncomeTransaction({ amount: 4_000, category: '식비' }),
+        createIncomeTransaction({ amount: 10_000, category: '급여' }),
         createTransferTransaction(),
         createExpenseTransaction({ amount: -50_000, category: undefined }),
       ],
@@ -145,8 +146,8 @@ describe('budget domain helpers', () => {
 
     const living = budgets.find((budget) => budget.groupName === '생활비')
     expect(living).toMatchObject({
-      spent: 24_000,
-      remaining: 1_476_000,
+      spent: 20_000,
+      remaining: 1_480_000,
     })
   })
 

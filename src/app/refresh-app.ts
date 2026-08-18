@@ -30,7 +30,16 @@ export function createLatestVersionUrl(
   return url.toString()
 }
 
-export async function refreshToLatestVersion(): Promise<void> {
-  const latestVersion = await getLatestBuildVersion()
-  window.location.replace(createLatestVersionUrl(window.location.href, latestVersion))
+export async function refreshToLatestVersion(
+  currentVersion: string,
+  fetcher: typeof fetch = fetch,
+  replace: (url: string) => void = (url) => window.location.replace(url),
+): Promise<boolean> {
+  const latestVersion = await getLatestBuildVersion(fetcher)
+  if (latestVersion === currentVersion) {
+    return false
+  }
+
+  replace(createLatestVersionUrl(window.location.href, latestVersion))
+  return true
 }
