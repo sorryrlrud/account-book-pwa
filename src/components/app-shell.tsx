@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAppService } from '@/app/use-app-service.ts'
+import { refreshToLatestVersion } from '@/app/refresh-app.ts'
 
 const MENU_ITEMS = [
   { label: '정산', to: '/settlement' },
@@ -19,6 +20,7 @@ export function AppShell() {
   const service = useAppService()
   const [menuOpen, setMenuOpen] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const location = useLocation()
 
   useEffect(() => {
@@ -51,6 +53,21 @@ export function AppShell() {
       setActionError(
         error instanceof Error ? error.message : '로그아웃 중 오류가 발생했습니다.',
       )
+    }
+  }
+
+  const handleRefresh = async () => {
+    try {
+      setActionError('')
+      setIsRefreshing(true)
+      await refreshToLatestVersion()
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : '최신 버전을 확인하는 중 오류가 발생했습니다.',
+      )
+      setIsRefreshing(false)
     }
   }
 
@@ -129,6 +146,18 @@ export function AppShell() {
                   </NavLink>
                 </li>
               ))}
+              <li>
+                <button
+                  type="button"
+                  className="menu-link menu-link--button"
+                  onClick={() => {
+                    void handleRefresh()
+                  }}
+                  disabled={isRefreshing}
+                >
+                  {isRefreshing ? '최신 버전 확인 중...' : '새 버전으로 새로고침'}
+                </button>
+              </li>
               <li>
                 <button
                   type="button"

@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
@@ -27,6 +27,19 @@ function createBuildVersion(date = new Date()): string {
 
 const appVersion = process.env.VITE_APP_VERSION || createBuildVersion()
 
+function buildVersionFile(version: string): Plugin {
+  return {
+    name: 'build-version-file',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ version }),
+      })
+    },
+  }
+}
+
 export default defineConfig({
   base,
   define: {
@@ -39,6 +52,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    buildVersionFile(appVersion),
     VitePWA({
       injectRegister: false,
       selfDestroying: true,
