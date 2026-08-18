@@ -865,6 +865,35 @@ describe('GoogleSheetsLedgerRepository', () => {
     ])
   })
 
+  it('resets the effective budget to its base snapshot without accumulating adjustments', async () => {
+    const { repository } = createHarness()
+
+    await repository.updateBudgetAdjustment(2026, 8, 'Living', 123000)
+    const beforeReset = (await repository.getMonthlyBudgets(2026, 8))
+      .find((budget) => budget.groupName === 'Living')
+    if (!beforeReset) throw new Error('Missing Living budget')
+
+    await repository.resetBudgetCarryOver(2026, 8, 'Living')
+    const afterFirstReset = (await repository.getMonthlyBudgets(2026, 8))
+      .find((budget) => budget.groupName === 'Living')
+
+    expect(afterFirstReset).toMatchObject({
+      baseSnapshot: 1_000_000,
+      adjustment: -beforeReset.carryOver,
+      effectiveBudget: 1_000_000,
+    })
+
+    await repository.resetBudgetCarryOver(2026, 8, 'Living')
+    const afterSecondReset = (await repository.getMonthlyBudgets(2026, 8))
+      .find((budget) => budget.groupName === 'Living')
+
+    expect(afterSecondReset).toMatchObject({
+      baseSnapshot: 1_000_000,
+      adjustment: -beforeReset.carryOver,
+      effectiveBudget: 1_000_000,
+    })
+  })
+
   it('creates budget groups and updates their default monthly budget', async () => {
     const { repository, fakeSheetsClient } = createHarness()
 

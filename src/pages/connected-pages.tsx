@@ -258,12 +258,12 @@ export function ConnectedBudgetPage() {
     try {
       await service.resetBudget(selection.year, selection.month, groupName)
       await load()
-      setStatus('현재 이월금을 수동조정으로 초기화했습니다.')
+      setStatus('현재 월 예산을 기준 월예산으로 초기화했습니다.')
     } catch (resetError) {
       setError(
         resetError instanceof Error
           ? resetError.message
-          : '이월금을 초기화하지 못했습니다.',
+          : '현재 월 예산을 초기화하지 못했습니다.',
       )
     } finally {
       setIsMutating(false)
@@ -295,8 +295,8 @@ export function ConnectedBudgetPage() {
         } : undefined}
         resetConfirmation={resetGroupName ? {
           open: true,
-          title: '이월금을 초기화할까요?',
-          description: '현재 이월금만큼 반대 방향 수동조정을 기록합니다. 기준 월예산은 바뀌지 않습니다.',
+          title: '현재 월 예산을 초기화할까요?',
+          description: '기존 수동조정을 이월 상쇄액으로 교체해 실제예산을 기준 월예산과 같게 만듭니다.',
           confirmLabel: '초기화',
           busy: isMutating,
           tone: 'danger',

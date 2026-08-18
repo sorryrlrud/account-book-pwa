@@ -659,7 +659,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       year,
       month,
       groupName,
-      budget.adjustment + resetCarryOverAdjustment(budget.carryOver),
+      resetCarryOverAdjustment(budget.carryOver),
     )
   }
 
