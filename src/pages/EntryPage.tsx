@@ -200,7 +200,7 @@ export function EntryPage() {
           <p className="empty-state">
             {service.hasWriteAccess
               ? '아직 성공적으로 저장된 거래가 없습니다.'
-              : 'TEST Spreadsheet ID가 확인되면 저장 기능이 활성화됩니다.'}
+              : 'Google 로그인과 Sheet 접근 확인이 완료되면 저장 기능이 활성화됩니다.'}
           </p>
         )}
       </section>

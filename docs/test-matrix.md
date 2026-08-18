@@ -56,7 +56,7 @@
   - 월 이동 수정 실패 후 재시도 중복 방지
   - transaction/transfer 삭제
   - 통장/카테고리 load, rename 범위, 사용중지
-  - 연도 그래프, 인접 연도 연결, linked TEST write guard
+  - 연도 그래프, 인접 연도 연결, 설정된 workbook 대상 검증
   - `12월 -> 0월` 거래 snapshot과 예산 잔여 동기화
   - `0!AB:AC` 시작잔액 기반 정산과 optional 투자/에너지 graceful failure
 - `src/services/sheets/schema.test.ts`
@@ -70,6 +70,6 @@
 자동화만으로 대체할 수 없는 항목:
 
 - 실제 Google OAuth
-- 실제 TEST Spreadsheet read/write
+- 권한이 있는 두 사용자 계정의 실제 TEST Spreadsheet read/write
 - 다중 사용자 동시 append
 - iPhone Safari / Android Chrome / 설치 PWA 검증

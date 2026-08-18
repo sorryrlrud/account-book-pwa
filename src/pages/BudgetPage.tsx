@@ -165,7 +165,7 @@ export default function BudgetPage({
               </p>
             ) : null}
             {!canWrite ? (
-              <p className="form-status">TEST Spreadsheet 쓰기가 허용된 경우에만 예산을 변경할 수 있습니다.</p>
+              <p className="form-status">Google 로그인과 Sheet 접근 확인이 완료되면 예산을 변경할 수 있습니다.</p>
             ) : null}
             <div className="budget-page__actions">
               <button type="button" className="primary-button" onClick={onSubmitAdjustment} disabled={isBusy || !canWrite || !adjustmentChanged}>

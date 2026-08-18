@@ -60,7 +60,8 @@
 - `A1:B1`은 각각 `key`, `value` 헤더이며 실제 설정값은 2행부터 시작
 - `schemaVersion`은 `1`
 - `year`는 Spreadsheet 연도와 일치
-- 개발/검증용 사본은 `environment`를 반드시 `TEST`로 지정
+- 현재 연결된 사본은 식별을 위해 `environment = TEST`를 유지한다.
+- `environment` 값은 설명용 메타데이터이며 write 허용 여부를 결정하지 않는다.
 - 이전/다음 연도 연결은 이 탭을 통해 추적
 
 ## Month sheets

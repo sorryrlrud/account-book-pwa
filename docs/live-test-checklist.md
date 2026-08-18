@@ -1,6 +1,6 @@
 # Live TEST checklist
 
-이 체크리스트는 자동화만으로 확인할 수 없는 실제 Google/모바일/PWA 검증 항목을 정리합니다.
+이 체크리스트는 자동화만으로 확인할 수 없는 실제 Google/모바일/PWA 검증 항목을 정리합니다. 현재 연결된 TEST Spreadsheet는 두 사용자의 운영 데이터이므로 정상적인 검증 read/write에 별도 승인 절차를 요구하지 않습니다.
 
 ## Preconditions
 
@@ -8,7 +8,7 @@
 - Google Sheets API 활성화 완료
 - OAuth Web Client ID 발급 완료
 - GitHub Pages 배포 완료
-- 대상 Google 계정에 TEST Spreadsheet 공유 완료
+- 두 사용자 Google 계정에 TEST Spreadsheet 공유 완료
 - 최초 TEST 연도의 `0!AB:AC` 통장별 연도 시작잔액 검증 완료
 
 ## A. OAuth and access
@@ -22,6 +22,7 @@
 ## B. Transaction write safety
 
 - [ ] 로그인·접근 권한·시트 구조 검증을 통과하면 write가 활성화된다.
+- [ ] `environment` 라벨과 무관하게 설정된 TEST workbook에는 정상 write가 가능하다.
 - [ ] 저장 중 중복 클릭이 막힌다.
 - [ ] write 실패 시 성공 메시지가 보이지 않는다.
 - [ ] 네트워크 오류 시 재시도 안내가 보인다.
