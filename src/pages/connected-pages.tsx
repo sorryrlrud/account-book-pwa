@@ -115,12 +115,10 @@ export function ConnectedBudgetPage() {
   const [groups, setGroups] = useState<BudgetGroupView[]>([])
   const [selectedGroupName, setSelectedGroupName] = useState('')
   const [draft, setDraft] = useState({ groupName: '', amount: '' })
-  const [baseBudgetDraft, setBaseBudgetDraft] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [confirmAdjustment, setConfirmAdjustment] = useState(false)
-  const [confirmBaseBudget, setConfirmBaseBudget] = useState(false)
   const [resetGroupName, setResetGroupName] = useState('')
   const [isMutating, setIsMutating] = useState(false)
   const getSettingsData = service.getSettingsData
@@ -166,9 +164,8 @@ export function ConnectedBudgetPage() {
         const selected = nextGroups.find((group) => group.group.name === nextSelected)
         setDraft({
           groupName: nextSelected,
-          amount: selected ? String(selected.monthly.adjustment) : '',
+          amount: selected ? '0' : '',
         })
-        setBaseBudgetDraft(selected ? String(selected.group.baseMonthlyBudget) : '')
         return nextSelected
       })
       setStatus(nextGroups.length ? '' : '표시할 예산 그룹이 없습니다.')
@@ -188,8 +185,13 @@ export function ConnectedBudgetPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    const reloadSheetValues = () => { void load() }
+    window.addEventListener('focus', reloadSheetValues)
+    return () => window.removeEventListener('focus', reloadSheetValues)
+  }, [load])
+
   const adjustmentAmount = Number(draft.amount.replaceAll(',', ''))
-  const baseBudgetAmount = Number(baseBudgetDraft.replaceAll(',', ''))
   const submitAdjustment = () => {
     if (!draft.groupName || !draft.amount.trim() || !Number.isFinite(adjustmentAmount)) {
       setError('예산 그룹과 조정 금액을 확인해주세요.')
@@ -210,41 +212,13 @@ export function ConnectedBudgetPage() {
         adjustmentAmount,
       )
       await load()
-      setStatus('예산 조정을 저장했습니다.')
+      setStatus('1회 예산 조정을 누적했습니다.')
     } catch (saveError) {
       setError(
         saveError instanceof Error
           ? saveError.message
           : '예산 조정을 저장하지 못했습니다.',
       )
-    } finally {
-      setIsMutating(false)
-    }
-  }
-
-  const submitBaseBudget = () => {
-    if (!draft.groupName || !baseBudgetDraft.trim() || !Number.isFinite(baseBudgetAmount) || baseBudgetAmount < 0) {
-      setError('예산 그룹과 기준 월예산을 확인해주세요.')
-      return
-    }
-    setConfirmBaseBudget(true)
-  }
-
-  const applyBaseBudget = async () => {
-    setConfirmBaseBudget(false)
-    setError('')
-    setIsMutating(true)
-    try {
-      await service.updateBudgetGroupBase(
-        selection.year,
-        selection.month,
-        draft.groupName,
-        baseBudgetAmount,
-      )
-      await load()
-      setStatus('기준 월예산을 변경했습니다.')
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : '기준 월예산을 저장하지 못했습니다.')
     } finally {
       setIsMutating(false)
     }
@@ -279,7 +253,6 @@ export function ConnectedBudgetPage() {
         groups={groups}
         selectedGroupName={selectedGroupName}
         adjustmentDraft={draft}
-        baseBudgetDraft={baseBudgetDraft}
         adjustmentError={error}
         isBusy={isLoading || isMutating}
         canWrite={service.hasWriteAccess}
@@ -287,7 +260,7 @@ export function ConnectedBudgetPage() {
         adjustmentConfirmation={confirmAdjustment ? {
           open: true,
           title: '예산 조정을 적용할까요?',
-          description: `${draft.groupName}의 이번 달 조정을 ${adjustmentAmount.toLocaleString('ko-KR')}원으로 저장합니다.`,
+          description: `${draft.groupName}의 이번 달 누적 조정에 ${adjustmentAmount.toLocaleString('ko-KR')}원을 더합니다.`,
           confirmLabel: '적용',
           busy: isMutating,
           onConfirm: () => { void applyAdjustment() },
@@ -303,15 +276,6 @@ export function ConnectedBudgetPage() {
           onConfirm: () => { void resetCarryOver() },
           onCancel: () => setResetGroupName(''),
         } : undefined}
-        baseBudgetConfirmation={confirmBaseBudget ? {
-          open: true,
-          title: '기준 월예산을 변경할까요?',
-          description: `${draft.groupName}의 ${selection.month}월부터 12월까지 기준값을 ${baseBudgetAmount.toLocaleString('ko-KR')}원으로 변경합니다. 이전 월의 기준값과 모든 수동조정은 유지됩니다.`,
-          confirmLabel: '변경',
-          busy: isMutating,
-          onConfirm: () => { void applyBaseBudget() },
-          onCancel: () => setConfirmBaseBudget(false),
-        } : undefined}
         canGoPrevious={monthControl.canGoPrevious && !isLoading && !isMutating}
         canGoNext={monthControl.canGoNext && !isLoading && !isMutating}
         onPreviousMonth={() => monthControl.shift(-1)}
@@ -322,13 +286,10 @@ export function ConnectedBudgetPage() {
           const selected = groups.find((group) => group.group.name === groupName)
           setDraft({
             groupName: nextGroupName,
-            amount: nextGroupName && selected ? String(selected.monthly.adjustment) : '',
+            amount: nextGroupName && selected ? '0' : '',
           })
-          setBaseBudgetDraft(nextGroupName && selected ? String(selected.group.baseMonthlyBudget) : '')
         }}
         onAdjustmentDraftChange={setDraft}
-        onBaseBudgetDraftChange={setBaseBudgetDraft}
-        onSubmitBaseBudget={submitBaseBudget}
         onSubmitAdjustment={submitAdjustment}
         onRequestResetCarryOver={setResetGroupName}
       />

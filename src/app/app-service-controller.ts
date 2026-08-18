@@ -527,7 +527,7 @@ export class AppServiceController {
     adjustment: number,
   ): Promise<void> {
     await this.#withRepository((repository) =>
-      repository.updateBudgetAdjustment(year, month, groupName, adjustment),
+      repository.addBudgetAdjustment(year, month, groupName, adjustment),
     )
   }
 
@@ -564,17 +564,6 @@ export class AppServiceController {
 
   async createBudgetGroup(year: number, input: Parameters<LedgerRepository['createBudgetGroup']>[1]) {
     return this.#withRepository((repository) => repository.createBudgetGroup(year, input))
-  }
-
-  async updateBudgetGroupBase(
-    year: number,
-    effectiveFromMonth: number,
-    name: string,
-    baseMonthlyBudget: number,
-  ): Promise<void> {
-    await this.#withRepository((repository) =>
-      repository.updateBudgetGroupBase(year, effectiveFromMonth, name, baseMonthlyBudget),
-    )
   }
 
   async createAccount(year: number, input: AccountMutation) {

@@ -1081,15 +1081,8 @@ button:not(:disabled):active {
 }
 
 .budget-page__selected-group,
-.budget-page__field-help,
 .budget-page__empty {
   margin: 0;
-}
-
-.budget-page__field-help {
-  color: var(--color-muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
 }
 
 .budget-page__actions,

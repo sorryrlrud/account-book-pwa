@@ -70,7 +70,7 @@ describe('BudgetPage', () => {
     const { rerender } = render(<BudgetPage {...props} />)
 
     expect(screen.getByRole('button', { name: /생활비/ })).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('상세 및 편집 · 조정')).not.toBeInTheDocument()
+    expect(screen.queryByText('상세 및 조정')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /생활비/ }))
     expect(onSelectGroup).toHaveBeenCalledWith('생활비')
@@ -84,7 +84,10 @@ describe('BudgetPage', () => {
     )
 
     expect(screen.getByRole('button', { name: /생활비/ })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('상세 및 편집 · 조정')).toBeVisible()
+    expect(screen.getByText('상세 및 조정')).toBeVisible()
+    expect(screen.getByLabelText('이번 달 수동조정')).toHaveValue('0')
+    expect(screen.queryByRole('button', { name: '기준예산 변경 확인' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/저장된 수동조정 금액/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '이월 금액 초기화' })).toBeVisible()
   })
 
@@ -137,5 +140,33 @@ describe('BudgetPage', () => {
       width: '100%',
     })
     expect(screen.getByText('0% 사용 (0 / 1,100,000원)')).toBeVisible()
+  })
+
+  it('accepts a one-time delta even when a different adjustment total is already stored', () => {
+    const adjustedGroup: BudgetGroupView = {
+      ...GROUP,
+      monthly: {
+        ...GROUP.monthly,
+        adjustment: 50_000,
+        effectiveBudget: 1_150_000,
+        remaining: 710_000,
+      },
+    }
+    render(
+      <BudgetPage
+        year={2026}
+        month={8}
+        groups={[adjustedGroup]}
+        selectedGroupName="생활비"
+        adjustmentDraft={{ groupName: '생활비', amount: '100000' }}
+        onPreviousMonth={vi.fn()}
+        onNextMonth={vi.fn()}
+        onAdjustmentDraftChange={vi.fn()}
+        onSubmitAdjustment={vi.fn()}
+        onRequestResetCarryOver={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: '조정 적용 확인' })).toBeEnabled()
   })
 })

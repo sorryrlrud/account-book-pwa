@@ -47,8 +47,6 @@ export function AppServiceProvider({ children }: { children: ReactNode }) {
       controller.resetBudget(year, month, groupName),
     getSettingsData: (year) => controller.getSettingsData(year),
     createBudgetGroup: (year, input) => controller.createBudgetGroup(year, input),
-    updateBudgetGroupBase: (year, effectiveFromMonth, name, baseMonthlyBudget) =>
-      controller.updateBudgetGroupBase(year, effectiveFromMonth, name, baseMonthlyBudget),
     createAccount: (year, input) => controller.createAccount(year, input),
     renameAccount: (year, previousName, nextName) =>
       controller.renameAccount(year, previousName, nextName),
