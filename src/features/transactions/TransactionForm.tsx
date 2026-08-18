@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { formatDateHeading, shiftDate } from '@/features/transactions/date.ts'
-import { toAmountInput } from '@/features/transactions/format.ts'
+import { parseAmountInput, toAmountInput } from '@/features/transactions/format.ts'
 import type {
   EntryMode,
   EntryTab,
@@ -53,7 +53,7 @@ function buildEditState(transaction: Transaction): TransactionFormState {
   return {
     type: transaction.type === 'unknown' ? 'expense' : transaction.type,
     date: transaction.date,
-    amountInput: `${Math.abs(transaction.amount)}`,
+    amountInput: toAmountInput(`${Math.abs(transaction.amount)}`),
     description: transaction.description,
     account: transaction.account,
     category: transaction.category ?? '',
@@ -170,7 +170,7 @@ export function TransactionForm({
       return '날짜를 확인해 주세요.'
     }
 
-    const amount = Number(form.amountInput)
+    const amount = parseAmountInput(form.amountInput)
     if (!Number.isFinite(amount) || amount <= 0) {
       return '금액은 0보다 큰 숫자여야 합니다.'
     }
@@ -197,10 +197,6 @@ export function TransactionForm({
       return ''
     }
 
-    if (!form.category) {
-      return '분류를 선택해 주세요.'
-    }
-
     return ''
   }
 
@@ -215,9 +211,7 @@ export function TransactionForm({
   )
   const referenceMessage = accounts.length === 0
     ? '설정에서 사용할 통장을 먼저 등록해 주세요.'
-    : form.type !== 'transfer' && categories.length === 0
-      ? '설정에서 사용할 카테고리를 먼저 등록해 주세요.'
-      : ''
+    : ''
   const accountOptions = buildOptions(accounts, [
     initialTransaction?.account,
     initialTransaction?.destinationAccount,
@@ -254,10 +248,10 @@ export function TransactionForm({
     const draft = {
       type: form.type,
       date: form.date,
-      amount: Number(form.amountInput),
+      amount: parseAmountInput(form.amountInput),
       description: form.description.trim(),
       account: form.account,
-      category: form.type === 'transfer' ? undefined : form.category,
+      category: form.type === 'transfer' || !form.category ? undefined : form.category,
       destinationAccount:
         form.type === 'transfer' ? form.destinationAccount : undefined,
     }
@@ -430,8 +424,8 @@ export function TransactionForm({
               onChange={(event) => setField('category', event.target.value)}
               disabled={isBusy}
             >
-              <option value="" disabled>
-                카테고리 선택
+              <option value="">
+                카테고리 없음
               </option>
               {categoryOptions.map((category) => (
                 <option key={category.value} value={category.value}>

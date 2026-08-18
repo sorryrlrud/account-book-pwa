@@ -79,22 +79,18 @@ describe('TransactionForm', () => {
     expect(screen.getByRole('tab', { name: '수입' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('keeps the save button disabled until required create fields are valid', async () => {
+  it('formats the amount with thousands separators and allows an empty category', async () => {
     const user = userEvent.setup()
     const { onSubmit, container } = renderForm()
 
     const saveButton = screen.getByRole('button', { name: '저장' })
     const amountInput = container.querySelector('input[inputmode="numeric"]') as HTMLInputElement
     const descriptionInput = container.querySelector('input[placeholder="예: 점심 식사"]') as HTMLInputElement
-    const categorySelect = container.querySelectorAll('select')[1] as HTMLSelectElement
-
     expect(saveButton).toBeDisabled()
 
     await user.type(amountInput, '15000')
+    expect(amountInput).toHaveValue('15,000')
     await user.type(descriptionInput, '점심 식사')
-    expect(saveButton).toBeDisabled()
-
-    await user.selectOptions(categorySelect, 'Bills')
     expect(saveButton).not.toBeDisabled()
     await user.click(saveButton)
 
@@ -107,7 +103,7 @@ describe('TransactionForm', () => {
         amount: 15000,
         description: '점심 식사',
         account: 'Checking',
-        category: 'Bills',
+        category: undefined,
         destinationAccount: undefined,
       },
       resetState: {

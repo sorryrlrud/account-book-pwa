@@ -900,10 +900,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       throw new AppError('VALIDATION_ERROR', '입력값을 다시 확인해주세요.')
     }
 
-    if (draft.type !== 'transfer' && !(draft.category?.trim())) {
-      throw new AppError('VALIDATION_ERROR', '카테고리를 선택해주세요.')
-    }
-
     if (draft.type === 'transfer' && (!draft.destinationAccount || draft.destinationAccount === draft.account)) {
       throw new AppError('VALIDATION_ERROR', '출금 통장과 입금 통장을 다시 확인해주세요.')
     }

@@ -7,5 +7,10 @@ export function formatKrw(amount: number) {
 }
 
 export function toAmountInput(value: string) {
-  return value.replaceAll(/[^0-9]/g, '')
+  const digits = value.replaceAll(/[^0-9]/g, '')
+  return digits ? Number(digits).toLocaleString('ko-KR') : ''
+}
+
+export function parseAmountInput(value: string) {
+  return Number(value.replaceAll(',', ''))
 }
