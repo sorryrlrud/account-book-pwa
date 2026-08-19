@@ -16,7 +16,7 @@ const DEFAULT_FILTERS: HistoryFilters = {
 }
 
 const DEFAULT_YEAR = Number(DEFAULT_FILTERS.month.slice(0, 4))
-type CategoryStatisticsType = 'expense' | 'income'
+type StatisticsType = 'expense' | 'income' | 'account'
 
 export function HistoryPage() {
   const service = useAppService()
@@ -30,7 +30,7 @@ export function HistoryPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null)
-  const [categoryStatisticsType, setCategoryStatisticsType] = useState<CategoryStatisticsType>('expense')
+  const [statisticsType, setStatisticsType] = useState<StatisticsType>('expense')
   const [linkedYears, setLinkedYears] = useState<Set<number>>()
   const loadRequestRef = useRef(0)
   const listTransactions = service.listTransactions
@@ -136,26 +136,34 @@ export function HistoryPage() {
     )
   }, [filteredTransactions])
 
-  const categoryStatistics = useMemo(() => {
+  const statistics = useMemo(() => {
     const totals = new Map<string, number>()
     for (const transaction of transactions) {
-      if (transaction.type !== categoryStatisticsType) continue
-      const category = transaction.category?.trim()
-      if (!category) continue
-      totals.set(category, (totals.get(category) ?? 0) + Math.abs(transaction.amount))
+      if (statisticsType !== 'account' && transaction.type !== statisticsType) continue
+      const label = statisticsType === 'account'
+        ? transaction.account.trim()
+        : transaction.category?.trim()
+      if (!label) continue
+      totals.set(label, (totals.get(label) ?? 0) + Math.abs(transaction.amount))
     }
     const total = [...totals.values()].reduce((sum, amount) => sum + amount, 0)
     return {
       total,
       items: [...totals.entries()]
-        .map(([category, amount]) => ({
-          category,
+        .map(([label, amount]) => ({
+          label,
           amount,
           ratio: total > 0 ? (amount / total) * 100 : 0,
         }))
         .sort((left, right) => right.amount - left.amount),
     }
-  }, [categoryStatisticsType, transactions])
+  }, [statisticsType, transactions])
+
+  const statisticsLabel = statisticsType === 'expense'
+    ? '지출'
+    : statisticsType === 'income'
+      ? '수입'
+      : '통장(카드) 거래'
 
   const handleRefresh = () => {
     void loadTransactions(filters)
@@ -299,7 +307,7 @@ export function HistoryPage() {
           <div>
             <h2 id="category-statistics-title">카테고리 통계</h2>
             <p className="panel__description">
-              월 {categoryStatisticsType === 'expense' ? '지출' : '수입'} 합계 {formatKrw(categoryStatistics.total)}
+              월 {statisticsLabel} 합계 {formatKrw(statistics.total)}
             </p>
           </div>
         </div>
@@ -307,30 +315,31 @@ export function HistoryPage() {
           {([
             ['expense', '지출'],
             ['income', '수입'],
+            ['account', '통장(카드)'],
           ] as const).map(([type, label]) => (
             <button
               key={type}
               type="button"
               role="tab"
-              aria-selected={categoryStatisticsType === type}
-              className={`segmented__button${categoryStatisticsType === type ? ' is-active' : ''}`}
-              onClick={() => setCategoryStatisticsType(type)}
+              aria-selected={statisticsType === type}
+              className={`segmented__button${statisticsType === type ? ' is-active' : ''}`}
+              onClick={() => setStatisticsType(type)}
             >
               {label}
             </button>
           ))}
         </div>
-        {categoryStatistics.items.length ? (
+        {statistics.items.length ? (
           <div className="category-statistics__list">
-            {categoryStatistics.items.map((item) => (
-              <div className="category-statistics__item" key={item.category}>
+            {statistics.items.map((item) => (
+              <div className="category-statistics__item" key={item.label}>
                 <div className="category-statistics__heading">
-                  <strong>{item.category}</strong>
+                  <strong>{item.label}</strong>
                   <span>{formatKrw(item.amount)} · {Math.round(item.ratio)}%</span>
                 </div>
                 <div className="category-statistics__track" aria-hidden="true">
                   <div
-                    className={`category-statistics__value category-statistics__value--${categoryStatisticsType}`}
+                    className={`category-statistics__value category-statistics__value--${statisticsType}`}
                     style={{ width: `${item.ratio}%` }}
                   />
                 </div>
@@ -339,7 +348,7 @@ export function HistoryPage() {
           </div>
         ) : (
           <p className="empty-state">
-            이 달의 {categoryStatisticsType === 'expense' ? '지출' : '수입'} 통계가 없습니다.
+            이 달의 {statisticsLabel} 통계가 없습니다.
           </p>
         )}
       </section>
@@ -416,38 +425,12 @@ export function HistoryPage() {
 
       </section>
 
-      {editing ? (
-        <>
-          <TransactionForm
-            mode="edit"
-            title="거래 수정"
-            accounts={accounts}
-            categories={categories}
-            isBusy={isSaving}
-            isWriteEnabled={service.hasWriteAccess}
-            submitLabel="변경사항 저장"
-            errorMessage=""
-            statusMessage=""
-            initialTransaction={editing}
-            onSubmit={handleUpdate}
-            onCancel={() => setEditing(null)}
-          />
-          <button
-            type="button"
-            className="secondary-button secondary-button--full secondary-button--danger"
-            disabled={isSaving || !service.hasWriteAccess}
-            onClick={() => setPendingDelete(editing)}
-          >
-            거래 삭제
-          </button>
-        </>
-      ) : null}
-
       {pendingDelete ? (
-        <section className="panel">
+        <div className="confirmation-overlay">
+        <section className="panel confirmation-dialog history-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="history-delete-title">
           <div className="panel__header">
             <div>
-              <h2>삭제 확인</h2>
+              <h2 id="history-delete-title">삭제 확인</h2>
               <p className="panel__description">
                 {pendingDelete.description} 항목을 삭제하시겠습니까?
               </p>
@@ -474,6 +457,7 @@ export function HistoryPage() {
             </button>
           </div>
         </section>
+        </div>
       ) : null}
 
       <section className="panel">
@@ -492,12 +476,16 @@ export function HistoryPage() {
               <section key={date} className="history-group">
                 <h3>{formatDateHeading(date)}</h3>
                 <div className="history-list">
-                  {items.map((transaction, index) => (
+                  {items.map((transaction, index) => {
+                    const transactionKey = transaction.id ?? `${date}-${transaction.sourceRow ?? index}-${transaction.description}-${transaction.amount}`
+                    const isEditing = editing === transaction
+                    return (
+                    <div className={`history-item-wrap${isEditing ? ' is-editing' : ''}`} key={transactionKey}>
                     <button
                       type="button"
-                      key={transaction.id ?? `${date}-${transaction.sourceRow ?? index}-${transaction.description}-${transaction.amount}`}
                       className="history-item history-item--button"
-                      onClick={() => setEditing(transaction)}
+                      aria-expanded={isEditing}
+                      onClick={() => setEditing(isEditing ? null : transaction)}
                     >
                       <div>
                         <strong>{transaction.description}</strong>
@@ -517,10 +505,38 @@ export function HistoryPage() {
                               : transaction.amount,
                           )}
                         </strong>
-                        <span className="history-item__edit-label">수정</span>
+                        <span className="history-item__edit-label">{isEditing ? '닫기' : '수정'}</span>
                       </div>
                     </button>
-                  ))}
+                    {isEditing ? (
+                      <div className="history-item__editor">
+                        <TransactionForm
+                          mode="edit"
+                          title="거래 수정"
+                          accounts={accounts}
+                          categories={categories}
+                          isBusy={isSaving}
+                          isWriteEnabled={service.hasWriteAccess}
+                          submitLabel="변경사항 저장"
+                          errorMessage=""
+                          statusMessage=""
+                          initialTransaction={editing!}
+                          onSubmit={handleUpdate}
+                          onCancel={() => setEditing(null)}
+                        />
+                        <button
+                          type="button"
+                          className="secondary-button secondary-button--full secondary-button--danger"
+                          disabled={isSaving || !service.hasWriteAccess}
+                          onClick={() => setPendingDelete(editing!)}
+                        >
+                          거래 삭제
+                        </button>
+                      </div>
+                    ) : null}
+                    </div>
+                    )
+                  })}
                 </div>
               </section>
             ))}

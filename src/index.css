@@ -689,6 +689,37 @@ button:not(:disabled):active {
   gap: 7px;
 }
 
+.history-item-wrap {
+  min-width: 0;
+  display: grid;
+  border-radius: var(--radius-sm);
+}
+
+.history-item-wrap.is-editing {
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid #8cb5a3;
+  background: #edf5f0;
+}
+
+.history-item-wrap.is-editing .history-item {
+  background: transparent;
+}
+
+.history-item__editor {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.history-item__editor .transaction-form {
+  box-shadow: none;
+}
+
+.history-delete-dialog {
+  border-color: #e7c5c2;
+}
+
 .history-group {
   display: grid;
   gap: 10px;
@@ -748,7 +779,7 @@ button:not(:disabled):active {
 }
 
 .category-statistics__tabs {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .category-statistics__item {
@@ -787,6 +818,10 @@ button:not(:disabled):active {
 
 .category-statistics__value--income {
   background: var(--color-income);
+}
+
+.category-statistics__value--account {
+  background: #486f9c;
 }
 
 .read-page {
@@ -954,6 +989,58 @@ button:not(:disabled):active {
   min-width: 0;
   display: grid;
   gap: 10px;
+}
+
+.budget-page__totals {
+  gap: 10px;
+  border-color: #ccd9e8;
+  background: #f7faff;
+}
+
+.budget-page__totals-title {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.budget-page__total-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.budget-page__total {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.budget-page__total span {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.budget-page__total strong {
+  overflow-wrap: anywhere;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-page__total--budget {
+  background: #e8eef8;
+  color: #36577e;
+}
+
+.budget-page__total--remaining {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.budget-page__total--remaining.is-negative {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .budget-group-card {

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { BudgetGroupView } from '@/features/budgets/types.ts'
@@ -31,6 +31,28 @@ const GROUP: BudgetGroupView = {
 }
 
 describe('BudgetPage', () => {
+  it('shows the total and remaining monthly budget below the month navigator', () => {
+    render(
+      <BudgetPage
+        year={2026}
+        month={8}
+        groups={[GROUP]}
+        adjustmentDraft={{ groupName: '', amount: '' }}
+        onPreviousMonth={vi.fn()}
+        onNextMonth={vi.fn()}
+        onAdjustmentDraftChange={vi.fn()}
+        onSubmitAdjustment={vi.fn()}
+        onRequestResetCarryOver={vi.fn()}
+      />,
+    )
+
+    const totals = screen.getByRole('heading', { name: '이달 예산 계' }).closest('section')!
+    expect(within(totals).getByText('총 예산')).toBeVisible()
+    expect(within(totals).getByText('1,100,000원')).toBeVisible()
+    expect(within(totals).getByText('남은 예산')).toBeVisible()
+    expect(within(totals).getByText('660,000원')).toBeVisible()
+  })
+
   it('shows a loading message instead of the empty state while loading', () => {
     render(
       <BudgetPage

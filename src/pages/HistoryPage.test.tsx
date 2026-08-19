@@ -112,6 +112,29 @@ describe('HistoryPage', () => {
     expect(screen.getByRole('tab', { name: '수입' })).toHaveAttribute('aria-selected', 'true')
   })
 
+  it('shows totals by account across transaction types', async () => {
+    const user = userEvent.setup()
+    renderHistory()
+
+    await user.click(await screen.findByRole('tab', { name: '통장(카드)' }))
+
+    expect(screen.getByText('월 통장(카드) 거래 합계 ₩3,062,500')).toBeVisible()
+    expect(screen.getByText('₩3,062,500 · 100%')).toBeVisible()
+  })
+
+  it('expands the editor directly below the selected transaction', async () => {
+    const user = userEvent.setup()
+    renderHistory()
+
+    const transactionButton = await screen.findByRole('button', { name: /점심 식사/ })
+    await user.click(transactionButton)
+
+    expect(transactionButton).toHaveAttribute('aria-expanded', 'true')
+    const item = transactionButton.closest<HTMLElement>('.history-item-wrap')!
+    expect(within(item).getByRole('heading', { name: '거래 수정' })).toBeVisible()
+    expect(within(item).getByRole('button', { name: '거래 삭제' })).toBeVisible()
+  })
+
   it('filters the loaded month locally without another Sheets request', async () => {
     const user = userEvent.setup()
     const { listTransactions } = renderHistory()

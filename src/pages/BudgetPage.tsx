@@ -6,6 +6,7 @@ import type {
   BudgetGroupView,
 } from '@/features/budgets/types'
 import { formatMonthLabel } from '@/features/readViews/formatters'
+import { formatCurrency } from '@/features/readViews/formatters'
 
 export interface BudgetPageProps {
   year: number
@@ -93,6 +94,8 @@ export default function BudgetPage({
     Number.isFinite(parsedAdjustment) &&
     parsedAdjustment !== 0,
   )
+  const totalBudget = groups.reduce((sum, group) => sum + group.monthly.effectiveBudget, 0)
+  const totalRemaining = groups.reduce((sum, group) => sum + group.monthly.remaining, 0)
 
   return (
     <section className="read-page budget-page">
@@ -115,6 +118,20 @@ export default function BudgetPage({
           notice={monthNotice}
         />
       </header>
+
+      <section className="panel budget-page__totals" aria-labelledby="budget-totals-title">
+        <h3 id="budget-totals-title" className="budget-page__totals-title">이달 예산 계</h3>
+        <div className="budget-page__total-grid">
+          <div className="budget-page__total budget-page__total--budget">
+            <span>총 예산</span>
+            <strong>{formatCurrency(totalBudget)}</strong>
+          </div>
+          <div className={`budget-page__total budget-page__total--remaining${totalRemaining < 0 ? ' is-negative' : ''}`}>
+            <span>남은 예산</span>
+            <strong>{formatCurrency(totalRemaining)}</strong>
+          </div>
+        </div>
+      </section>
 
       <section className="budget-page__groups" aria-label="예산 그룹 목록">
         {groups.length ? groups.map((group) => {
