@@ -25,6 +25,7 @@ export interface MonthlyBudget {
   month: number
   groupName: string
   baseSnapshot: number
+  allocatedBudget: number
   carryOver: number
   adjustment: number
   effectiveBudget: number
@@ -32,6 +33,18 @@ export interface MonthlyBudget {
   remaining: number
   nextMonthExpected: number
 }
+
+export interface BudgetPlanGroupMutation {
+  name: string
+  allocatedBudget: number
+}
+
+export interface BudgetPlanMutation {
+  maximumBudget: number
+  groups: BudgetPlanGroupMutation[]
+}
+
+export const MONTHLY_BUDGET_LIMIT_GROUP = '__MONTHLY_BUDGET_LIMIT__'
 
 export interface BudgetSummary {
   group: BudgetGroup
@@ -90,15 +103,19 @@ export function calculateMonthlyBudgets(
 
   const results: MonthlyBudget[] = []
   for (const group of [...input.groups].sort((left, right) => left.order - right.order)) {
+    if (!group.active) {
+      continue
+    }
     const source = sourceByGroup.get(group.name)
     const baseSnapshot = source?.baseSnapshot ?? group.baseMonthlyBudget
     const adjustment = source?.adjustment ?? 0
+    const allocatedBudget = baseSnapshot + adjustment
     const carryOver = input.carryOvers?.[group.name]
       ?? (input.month === 1
         ? (input.monthZeroCarryOvers?.[group.name] ?? 0)
         : 0)
     const spent = spentByGroup.get(group.name) ?? 0
-    const effectiveBudget = baseSnapshot + carryOver + adjustment
+    const effectiveBudget = allocatedBudget + carryOver
     const remaining = effectiveBudget - spent
 
     results.push({
@@ -106,6 +123,7 @@ export function calculateMonthlyBudgets(
       month: input.month,
       groupName: group.name,
       baseSnapshot,
+      allocatedBudget,
       carryOver,
       adjustment,
       effectiveBudget,
@@ -171,8 +189,4 @@ export function buildBudgetTimeline(
   }
 
   return timeline
-}
-
-export function resetCarryOverAdjustment(currentCarryOver: number): number {
-  return -currentCarryOver
 }

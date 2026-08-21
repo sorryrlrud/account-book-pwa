@@ -12,10 +12,10 @@
 - `src/domain/budget.test.ts`
   - 예산 이월
   - 예산 초과
-  - 수동조정
+  - 레거시 수동조정의 할당액 보존
   - 0월 carry-over
-  - 이월 초기화
   - 다음 달 예상
+  - 비활성 예산 카테고리 제외
   - 수입/이체 제외 예산 사용액 계산
 - `src/utils/date.test.ts`
   - 한국시간 날짜 변환
@@ -56,6 +56,8 @@
   - 월 이동 수정 실패 후 재시도 중복 방지
   - transaction/transfer 삭제
   - 통장/카테고리 load, rename 범위, 사용중지
+  - 월별 최대 예산, 카테고리 할당·순서·추가·비활성화 일괄 저장
+  - 최대 예산 초과 및 중복 월별 행 쓰기 차단
   - 연도 그래프, 인접 연도 연결, 설정된 workbook 대상 검증
   - `12월 -> 0월` 거래 snapshot과 예산 잔여 동기화
   - `0!AB:AC` 시작잔액 기반 정산과 optional 투자/에너지 graceful failure

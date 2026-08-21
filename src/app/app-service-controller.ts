@@ -520,20 +520,17 @@ export class AppServiceController {
     return this.#withRepository((repository) => repository.getMonthlyBudgets(year, month))
   }
 
-  async updateBudget(
-    year: number,
-    month: number,
-    groupName: string,
-    adjustment: number,
-  ): Promise<void> {
-    await this.#withRepository((repository) =>
-      repository.addBudgetAdjustment(year, month, groupName, adjustment),
-    )
+  async getBudgetMaximum(year: number, month: number) {
+    return this.#withRepository((repository) => repository.getMonthlyBudgetMaximum(year, month))
   }
 
-  async resetBudget(year: number, month: number, groupName: string): Promise<void> {
+  async saveBudgetPlan(
+    year: number,
+    month: number,
+    input: Parameters<LedgerRepository['saveBudgetPlan']>[2],
+  ): Promise<void> {
     await this.#withRepository((repository) =>
-      repository.resetBudgetCarryOver(year, month, groupName),
+      repository.saveBudgetPlan(year, month, input),
     )
   }
 

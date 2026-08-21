@@ -1,9 +1,10 @@
 import type { Account, AccountMutation } from '@/domain/account.ts'
 import {
   buildBudgetTimeline,
-  resetCarryOverAdjustment,
+  MONTHLY_BUDGET_LIMIT_GROUP,
   type BudgetGroup,
   type BudgetGroupMutation,
+  type BudgetPlanMutation,
   type MonthlyBudget,
   type MonthlyBudgetSource,
 } from '@/domain/budget.ts'
@@ -42,6 +43,7 @@ import {
 import type { AppEnv } from '@/services/env.ts'
 import { assertMonth, getYearMonthFromDate } from '@/utils/date.ts'
 import {
+  normalizeBooleanCell,
   parseSheetNumber,
   toUserEnteredLiteral,
   trimCell,
@@ -480,7 +482,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     const config = await this.#resolveYearConfig(year)
     const groups = await this.getBudgetGroups(year)
     const name = input.name.trim()
-    if (!name) {
+    if (!name || name === MONTHLY_BUDGET_LIMIT_GROUP) {
       throw new AppError('VALIDATION_ERROR', '예산 그룹 이름을 입력해주세요.')
     }
     if (!Number.isFinite(input.baseMonthlyBudget) || input.baseMonthlyBudget < 0) {
@@ -541,89 +543,125 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     return timeline.filter((item) => item.month === month)
   }
 
-  async addBudgetAdjustment(
-    year: number,
-    month: number,
-    groupName: string,
-    adjustment: number,
-  ): Promise<void> {
-    if (!Number.isFinite(adjustment)) {
-      throw new AppError('VALIDATION_ERROR', '수동조정 금액을 확인해주세요.')
-    }
+  async getMonthlyBudgetMaximum(year: number, month: number): Promise<number | undefined> {
+    assertMonth(month)
     const config = await this.#resolveYearConfig(year)
     const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D'))
-    const rowNumber = this.#findBudgetSourceRow(range, month, groupName)
-    if (rowNumber === undefined) {
-      const group = (await this.getBudgetGroups(year)).find((item) => item.name === groupName)
-      if (!group) {
-        throw new AppError('NOT_FOUND', '예산 그룹을 찾지 못했습니다.')
-      }
-      await this.#sheetsClient.appendValues(
-        config.spreadsheetId,
-        buildRange('예산월별', 'A:D'),
-        [[String(month), toUserEnteredLiteral(groupName), String(group.baseMonthlyBudget), String(adjustment)]],
-      )
-      return
-    }
-    const currentAdjustment = parseSheetNumber(range.values?.[rowNumber - 1]?.[3])
-    await this.#sheetsClient.updateValues(
-      config.spreadsheetId,
-      buildRowRange('예산월별', rowNumber, 'A:D'),
-      [[
-        String(month),
-        toUserEnteredLiteral(groupName),
-        String(this.#readBaseSnapshot(range, rowNumber)),
-        String(currentAdjustment + adjustment),
-      ]],
-    )
+    const rowNumber = this.#findBudgetSourceRow(range, month, MONTHLY_BUDGET_LIMIT_GROUP)
+    return rowNumber === undefined
+      ? undefined
+      : parseSheetNumber(range.values?.[rowNumber - 1]?.[2])
   }
 
-  async #setBudgetAdjustment(
+  async saveBudgetPlan(
     year: number,
     month: number,
-    groupName: string,
-    adjustment: number,
+    input: BudgetPlanMutation,
   ): Promise<void> {
+    assertMonth(month)
+    if (!Number.isFinite(input.maximumBudget) || input.maximumBudget < 0) {
+      throw new AppError('VALIDATION_ERROR', '최대 예산을 확인해주세요.')
+    }
+    const normalizedGroups = input.groups.map((group) => ({
+      name: group.name.trim(),
+      allocatedBudget: group.allocatedBudget,
+    }))
+    if (normalizedGroups.some((group) =>
+      !group.name ||
+      group.name === MONTHLY_BUDGET_LIMIT_GROUP ||
+      !Number.isFinite(group.allocatedBudget) ||
+      group.allocatedBudget < 0
+    )) {
+      throw new AppError('VALIDATION_ERROR', '카테고리 이름과 할당 예산을 확인해주세요.')
+    }
+    const requestedNames = new Set(normalizedGroups.map((group) => group.name))
+    if (requestedNames.size !== normalizedGroups.length) {
+      throw new AppError('VALIDATION_ERROR', '같은 이름의 카테고리가 중복되어 있습니다.')
+    }
+    const allocatedTotal = normalizedGroups.reduce((sum, group) => sum + group.allocatedBudget, 0)
+    if (allocatedTotal > input.maximumBudget) {
+      throw new AppError('VALIDATION_ERROR', '할당된 예산이 최대 예산을 초과합니다.')
+    }
+
     const config = await this.#resolveYearConfig(year)
-    const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D'))
-    const rowNumber = this.#findBudgetSourceRow(range, month, groupName)
-    if (rowNumber === undefined) {
-      const group = (await this.getBudgetGroups(year)).find((item) => item.name === groupName)
-      if (!group) {
-        throw new AppError('NOT_FOUND', '예산 그룹을 찾지 못했습니다.')
+    const [groupRange, monthlyRange] = await Promise.all([
+      this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산그룹', 'A:D')),
+      this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D')),
+    ])
+    const groupRows = groupRange.values ?? []
+    const existingGroupRows = new Map<string, { rowNumber: number; row: string[] }>()
+    for (const [index, row] of groupRows.entries()) {
+      if (index === 0) continue
+      const name = trimCell(row[0])
+      if (!name) continue
+      if (existingGroupRows.has(name)) {
+        throw new AppError('VALIDATION_ERROR', `예산 그룹 “${name}” 행이 중복되어 저장할 수 없습니다.`)
       }
-      await this.#sheetsClient.appendValues(
-        config.spreadsheetId,
-        buildRange('예산월별', 'A:D'),
-        [[String(month), toUserEnteredLiteral(groupName), String(group.baseMonthlyBudget), String(adjustment)]],
-      )
-      return
+      existingGroupRows.set(name, { rowNumber: index + 1, row })
     }
-    await this.#sheetsClient.updateValues(
-      config.spreadsheetId,
-      buildRowRange('예산월별', rowNumber, 'A:D'),
-      [[
+
+    const updates: Array<{ range: string; values: string[][] }> = []
+    let nextGroupRow = groupRows.length + 1
+    for (const [index, group] of normalizedGroups.entries()) {
+      const existing = existingGroupRows.get(group.name)
+      const rowNumber = existing?.rowNumber ?? nextGroupRow++
+      const baseMonthlyBudget = existing
+        ? parseSheetNumber(existing.row[1])
+        : group.allocatedBudget
+      updates.push({
+        range: buildRowRange('예산그룹', rowNumber, 'A:D'),
+        values: [[
+          toUserEnteredLiteral(group.name),
+          String(baseMonthlyBudget),
+          'TRUE',
+          String(index + 1),
+        ]],
+      })
+    }
+
+    for (const [name, existing] of existingGroupRows) {
+      if (!requestedNames.has(name) && normalizeBooleanCell(existing.row[2])) {
+        updates.push({
+          range: buildRowRange('예산그룹', existing.rowNumber, 'A:D'),
+          values: [[
+            toUserEnteredLiteral(name),
+            String(parseSheetNumber(existing.row[1])),
+            'FALSE',
+            String(parseSheetNumber(existing.row[3])),
+          ]],
+        })
+      }
+    }
+
+    const monthlyRows = monthlyRange.values ?? []
+    let nextMonthlyRow = monthlyRows.length + 1
+    for (const group of normalizedGroups) {
+      const existingRowNumber = this.#findBudgetSourceRow(monthlyRange, month, group.name)
+      const rowNumber = existingRowNumber ?? nextMonthlyRow++
+      updates.push({
+        range: buildRowRange('예산월별', rowNumber, 'A:D'),
+        values: [[
+          String(month),
+          toUserEnteredLiteral(group.name),
+          String(group.allocatedBudget),
+          '0',
+        ]],
+      })
+    }
+
+    const limitRowNumber = this.#findBudgetSourceRow(monthlyRange, month, MONTHLY_BUDGET_LIMIT_GROUP)
+      ?? nextMonthlyRow
+    updates.push({
+      range: buildRowRange('예산월별', limitRowNumber, 'A:D'),
+      values: [[
         String(month),
-        toUserEnteredLiteral(groupName),
-        String(this.#readBaseSnapshot(range, rowNumber)),
-        String(adjustment),
+        MONTHLY_BUDGET_LIMIT_GROUP,
+        String(input.maximumBudget),
+        '0',
       ]],
-    )
-  }
+    })
 
-  async resetBudgetCarryOver(year: number, month: number, groupName: string): Promise<void> {
-    const budgets = await this.getMonthlyBudgets(year, month)
-    const budget = budgets.find((item) => item.groupName === groupName)
-    if (!budget) {
-      throw new AppError('NOT_FOUND', '예산 그룹을 찾지 못했습니다.')
-    }
-
-    await this.#setBudgetAdjustment(
-      year,
-      month,
-      groupName,
-      resetCarryOverAdjustment(budget.carryOver),
-    )
+    await this.#sheetsClient.batchUpdateValues(config.spreadsheetId, updates)
   }
 
   async linkYear(request: YearLinkRequest): Promise<LinkedYear[]> {
@@ -1169,14 +1207,10 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     if (rowNumbers.length > 1) {
       throw new AppError(
         'VALIDATION_ERROR',
-        `${groupName}의 ${month}월 예산 행이 중복되어 수동조정을 저장할 수 없습니다.`,
+        `${groupName}의 ${month}월 예산 행이 중복되어 저장할 수 없습니다.`,
       )
     }
     return rowNumbers[0]
-  }
-
-  #readBaseSnapshot(range: SheetsValueRange, rowNumber: number): number {
-    return parseSheetNumber(range.values?.[rowNumber - 1]?.[2])
   }
 
   #getMonthZeroCarryOvers(

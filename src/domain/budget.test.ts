@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   buildBudgetTimeline,
   calculateMonthlyBudgets,
-  resetCarryOverAdjustment,
 } from './budget.ts'
 import {
   createExpenseTransaction,
@@ -74,7 +73,7 @@ describe('budget domain helpers', () => {
     })
   })
 
-  it('applies manual adjustments to the effective budget', () => {
+  it('folds legacy manual adjustments into the allocated budget', () => {
     const budgets = calculateMonthlyBudgets({
       year: 2026,
       month: 8,
@@ -101,6 +100,7 @@ describe('budget domain helpers', () => {
     expect(budgets[0]).toMatchObject({
       baseSnapshot: 5_000_000,
       adjustment: -3_000_000,
+      allocatedBudget: 2_000_000,
       effectiveBudget: 2_000_000,
       remaining: 2_000_000,
       nextMonthExpected: 7_000_000,
@@ -151,8 +151,16 @@ describe('budget domain helpers', () => {
     })
   })
 
-  it('resets carry-over by applying the opposite adjustment', () => {
-    expect(resetCarryOverAdjustment(500_000)).toBe(-500_000)
-    expect(resetCarryOverAdjustment(-85_000)).toBe(85_000)
+  it('does not include inactive budget categories', () => {
+    const budgets = calculateMonthlyBudgets({
+      year: 2026,
+      month: 8,
+      groups: sampleBudgetGroups.map((group) => ({ ...group, active: false })),
+      categories: sampleCategories,
+      monthlySources: sampleMonthlySources,
+      transactions: [],
+    })
+
+    expect(budgets).toEqual([])
   })
 })

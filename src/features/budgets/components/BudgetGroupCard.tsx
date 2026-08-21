@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { formatCurrency, formatSignedCurrency } from '@/features/readViews/formatters'
 import type { BudgetGroupView } from '@/features/budgets/types'
 
@@ -6,7 +5,6 @@ export interface BudgetGroupCardProps {
   item: BudgetGroupView
   expanded?: boolean
   onSelect?: (groupName: string) => void
-  children?: ReactNode
 }
 
 function clampPercent(value: number): number {
@@ -17,7 +15,7 @@ function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, value))
 }
 
-export function BudgetGroupCard({ item, expanded = false, onSelect, children }: BudgetGroupCardProps) {
+export function BudgetGroupCard({ item, expanded = false, onSelect }: BudgetGroupCardProps) {
   const availableBudget = item.monthly.effectiveBudget
   const remainingRatio =
     availableBudget <= 0
@@ -62,17 +60,16 @@ export function BudgetGroupCard({ item, expanded = false, onSelect, children }: 
             {item.details.map((detail) => (
               <div key={detail.label}>
                 <dt>{detail.label}</dt>
-                <dd>{formatSignedCurrency(detail.amount)}</dd>
+                <dd>{detail.signed ? formatSignedCurrency(detail.amount) : formatCurrency(detail.amount)}</dd>
               </div>
             ))}
             <div>
-              <dt>다음 달 예상</dt>
-              <dd>{formatSignedCurrency(item.monthly.nextMonthExpected)}</dd>
+              <dt>다음 달 이월 예상</dt>
+              <dd>{formatSignedCurrency(item.monthly.remaining)}</dd>
             </div>
           </dl>
 
           {item.note ? <p className="budget-group-card__note">{item.note}</p> : null}
-          {children}
         </div>
       ) : null}
     </article>

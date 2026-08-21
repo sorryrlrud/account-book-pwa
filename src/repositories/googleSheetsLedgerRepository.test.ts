@@ -852,46 +852,65 @@ describe('GoogleSheetsLedgerRepository', () => {
     ])
   })
 
-  it('creates a missing monthly budget row when its first adjustment is saved', async () => {
+  it('saves monthly allocations, a maximum, and new category rows in one batch', async () => {
     const { repository, fakeSheetsClient } = createHarness()
 
-    await repository.addBudgetAdjustment(2026, 2, 'Living', -300000)
+    await repository.saveBudgetPlan(2026, 8, {
+      maximumBudget: 1_000_000,
+      groups: [
+        { name: 'Living', allocatedBudget: 800_000 },
+        { name: 'Travel', allocatedBudget: 100_000 },
+      ],
+    })
 
-    expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산월별').at(-1)).toEqual([
-      '2',
-      'Living',
-      '1000000',
-      '-300000',
-    ])
+    expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(1)
+    expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산그룹')).toEqual(expect.arrayContaining([
+      ['Living', '1000000', 'TRUE', '1'],
+      ['Travel', '100000', 'TRUE', '2'],
+    ]))
+    expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산월별')).toEqual(expect.arrayContaining([
+      ['8', 'Living', '800000', '0'],
+      ['8', 'Travel', '100000', '0'],
+      ['8', '__MONTHLY_BUDGET_LIMIT__', '1000000', '0'],
+    ]))
+    await expect(repository.getMonthlyBudgetMaximum(2026, 8)).resolves.toBe(1_000_000)
+    expect(
+      (await repository.getMonthlyBudgets(2026, 8))
+        .find((budget) => budget.groupName === 'Living')?.allocatedBudget,
+    ).toBe(800_000)
+
+    await repository.saveBudgetPlan(2026, 8, {
+      maximumBudget: 1_000_000,
+      groups: [
+        { name: 'Travel', allocatedBudget: 100_000 },
+        { name: 'Living', allocatedBudget: 800_000 },
+      ],
+    })
+    expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산그룹')).toEqual(expect.arrayContaining([
+      ['Living', '1000000', 'TRUE', '2'],
+      ['Travel', '100000', 'TRUE', '1'],
+    ]))
+    expect(
+      fakeSheetsClient.getSheetValues('sheet-2026', '예산월별')
+        .filter((row) => row[0] === '8' && row[1] === '__MONTHLY_BUDGET_LIMIT__'),
+    ).toHaveLength(1)
   })
 
-  it('resets the effective budget to its base snapshot without accumulating adjustments', async () => {
-    const { repository } = createHarness()
+  it('deactivates removed categories without deleting their rows', async () => {
+    const { repository, fakeSheetsClient } = createHarness()
 
-    await repository.addBudgetAdjustment(2026, 8, 'Living', 123000)
-    const beforeReset = (await repository.getMonthlyBudgets(2026, 8))
-      .find((budget) => budget.groupName === 'Living')
-    if (!beforeReset) throw new Error('Missing Living budget')
-
-    await repository.resetBudgetCarryOver(2026, 8, 'Living')
-    const afterFirstReset = (await repository.getMonthlyBudgets(2026, 8))
-      .find((budget) => budget.groupName === 'Living')
-
-    expect(afterFirstReset).toMatchObject({
-      baseSnapshot: 1_000_000,
-      adjustment: -beforeReset.carryOver,
-      effectiveBudget: 1_000_000,
+    await repository.saveBudgetPlan(2026, 8, {
+      maximumBudget: 0,
+      groups: [],
     })
 
-    await repository.resetBudgetCarryOver(2026, 8, 'Living')
-    const afterSecondReset = (await repository.getMonthlyBudgets(2026, 8))
-      .find((budget) => budget.groupName === 'Living')
-
-    expect(afterSecondReset).toMatchObject({
-      baseSnapshot: 1_000_000,
-      adjustment: -beforeReset.carryOver,
-      effectiveBudget: 1_000_000,
-    })
+    expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산그룹')[1]).toEqual([
+      'Living',
+      '1000000',
+      'FALSE',
+      '1',
+    ])
+    expect(await repository.getMonthlyBudgets(2026, 8)).toEqual([])
   })
 
   it('creates budget groups', async () => {
@@ -907,24 +926,7 @@ describe('GoogleSheetsLedgerRepository', () => {
     ])
   })
 
-  it('adds each one-time adjustment to the stored monthly total', async () => {
-    const { repository, fakeSheetsClient } = createHarness()
-
-    await repository.addBudgetAdjustment(2026, 8, 'Living', 50000)
-    await repository.addBudgetAdjustment(2026, 8, 'Living', 100000)
-
-    const augustSource = fakeSheetsClient
-      .getSheetValues('sheet-2026', '예산월별')
-      .slice(1)
-      .find((row) => row[0] === '8' && row[1] === 'Living')
-    expect(augustSource).toEqual(['8', 'Living', '1000000', '150000'])
-    expect(
-      (await repository.getMonthlyBudgets(2026, 8))
-        .find((budget) => budget.groupName === 'Living')?.adjustment,
-    ).toBe(150000)
-  })
-
-  it('rejects a one-time adjustment when the monthly source is duplicated', async () => {
+  it('rejects a budget save when the monthly source is duplicated', async () => {
     const workbooks = createDefaultWorkbooks()
     const currentWorkbook = workbooks.find((workbook) => workbook.spreadsheetId === 'sheet-2026')
     if (!currentWorkbook) throw new Error('Missing current workbook fixture')
@@ -939,9 +941,22 @@ describe('GoogleSheetsLedgerRepository', () => {
     const { repository, fakeSheetsClient } = createHarness({ workbooks })
 
     await expect(
-      repository.addBudgetAdjustment(2026, 8, 'Living', 100000),
+      repository.saveBudgetPlan(2026, 8, {
+        maximumBudget: 1_000_000,
+        groups: [{ name: 'Living', allocatedBudget: 1_000_000 }],
+      }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' })
-    expect(fakeSheetsClient.updateCalls).toHaveLength(0)
+    expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(0)
+  })
+
+  it('rejects allocations above the maximum before writing', async () => {
+    const { repository, fakeSheetsClient } = createHarness()
+
+    await expect(repository.saveBudgetPlan(2026, 8, {
+      maximumBudget: 900_000,
+      groups: [{ name: 'Living', allocatedBudget: 1_000_000 }],
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' })
+    expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(0)
   })
 
   it('renames account and category labels only on the current year months 1 through 12', async () => {

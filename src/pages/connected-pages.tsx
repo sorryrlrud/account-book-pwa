@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppService } from '@/app/use-app-service.ts'
 import type { BudgetGroup, MonthlyBudget } from '@/domain/budget.ts'
 import type { SettlementSummary } from '@/domain/settlement.ts'
-import type { BudgetGroupView } from '@/features/budgets/types.ts'
+import type { BudgetEditorDraft, BudgetGroupView } from '@/features/budgets/types.ts'
 import type {
   EditableAccount,
   EditableCategory,
@@ -113,25 +113,32 @@ export function ConnectedBudgetPage() {
   const monthControl = usePageMonth()
   const { selection } = monthControl
   const [groups, setGroups] = useState<BudgetGroupView[]>([])
+  const [maximumBudget, setMaximumBudget] = useState(0)
   const [selectedGroupName, setSelectedGroupName] = useState('')
-  const [draft, setDraft] = useState({ groupName: '', amount: '' })
+  const [isEditing, setIsEditing] = useState(false)
+  const isEditingRef = useRef(false)
+  const [draft, setDraft] = useState<BudgetEditorDraft>({
+    maximumBudget: '0',
+    groups: [],
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
-  const [confirmAdjustment, setConfirmAdjustment] = useState(false)
-  const [resetGroupName, setResetGroupName] = useState('')
+  const [confirmSave, setConfirmSave] = useState(false)
   const [isMutating, setIsMutating] = useState(false)
   const getSettingsData = service.getSettingsData
   const getBudgets = service.getBudgets
+  const getBudgetMaximum = service.getBudgetMaximum
 
   const load = useCallback(async () => {
     setIsLoading(true)
     setError('')
     setGroups([])
     try {
-      const [settings, budgets] = await Promise.all([
+      const [settings, budgets, storedMaximum] = await Promise.all([
         getSettingsData(selection.year),
         getBudgets(selection.year, selection.month),
+        getBudgetMaximum(selection.year, selection.month),
       ])
       const budgetByName = new Map(
         budgets.map((budget) => [budget.groupName, budget]),
@@ -147,9 +154,9 @@ export function ConnectedBudgetPage() {
             group,
             monthly,
             details: [
-              { label: '기준 월예산', amount: monthly.baseSnapshot },
-              { label: '전월 이월', amount: monthly.carryOver },
-              { label: '이번 달 조정', amount: monthly.adjustment },
+              { label: '할당 예산', amount: monthly.allocatedBudget },
+              { label: '이월 예산', amount: monthly.carryOver, signed: true },
+              { label: '사용액', amount: monthly.spent },
             ],
             note: monthly.remaining < 0
               ? `${Math.abs(monthly.remaining).toLocaleString('ko-KR')}원 초과`
@@ -157,16 +164,12 @@ export function ConnectedBudgetPage() {
           }]
         })
       setGroups(nextGroups)
+      setMaximumBudget(
+        storedMaximum
+          ?? nextGroups.reduce((sum, group) => sum + group.monthly.allocatedBudget, 0),
+      )
       setSelectedGroupName((current) => {
-        const nextSelected = nextGroups.some((group) => group.group.name === current)
-          ? current
-          : ''
-        const selected = nextGroups.find((group) => group.group.name === nextSelected)
-        setDraft({
-          groupName: nextSelected,
-          amount: selected ? '0' : '',
-        })
-        return nextSelected
+        return nextGroups.some((group) => group.group.name === current) ? current : ''
       })
       setStatus(nextGroups.length ? '' : '표시할 예산 그룹이 없습니다.')
     } catch (loadError) {
@@ -179,69 +182,94 @@ export function ConnectedBudgetPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [getBudgets, getSettingsData, selection.month, selection.year])
+  }, [getBudgetMaximum, getBudgets, getSettingsData, selection.month, selection.year])
 
   useEffect(() => {
     void load()
   }, [load])
 
   useEffect(() => {
-    const reloadSheetValues = () => { void load() }
+    const reloadSheetValues = () => {
+      if (!isEditingRef.current) void load()
+    }
     window.addEventListener('focus', reloadSheetValues)
     return () => window.removeEventListener('focus', reloadSheetValues)
   }, [load])
 
-  const adjustmentAmount = Number(draft.amount.replaceAll(',', ''))
-  const submitAdjustment = () => {
-    if (!draft.groupName || !draft.amount.trim() || !Number.isFinite(adjustmentAmount)) {
-      setError('예산 그룹과 조정 금액을 확인해주세요.')
-      return
-    }
-    setConfirmAdjustment(true)
+  const startEditing = () => {
+    setError('')
+    setStatus('')
+    setSelectedGroupName('')
+    setDraft({
+      maximumBudget: maximumBudget.toLocaleString('ko-KR'),
+      groups: groups.map((group) => ({
+        name: group.group.name,
+        allocatedBudget: group.monthly.allocatedBudget,
+      })),
+    })
+    isEditingRef.current = true
+    setIsEditing(true)
   }
 
-  const applyAdjustment = async () => {
-    setConfirmAdjustment(false)
+  const cancelEditing = () => {
+    setConfirmSave(false)
+    setError('')
+    isEditingRef.current = false
+    setIsEditing(false)
+  }
+
+  const removedGroupNames = groups
+    .map((group) => group.group.name)
+    .filter((name) => !draft.groups.some((group) => group.name === name))
+
+  const applyBudgetPlan = async () => {
+    const parsedMaximum = Number(draft.maximumBudget.replaceAll(',', ''))
+    if (!Number.isFinite(parsedMaximum) || parsedMaximum < 0) {
+      setError('최대 예산을 확인해주세요.')
+      return
+    }
+    const allocatedTotal = draft.groups.reduce((sum, group) => sum + group.allocatedBudget, 0)
+    if (allocatedTotal > parsedMaximum) {
+      setError('할당된 예산이 최대 예산을 초과합니다.')
+      return
+    }
+
+    setConfirmSave(false)
     setError('')
     setIsMutating(true)
     try {
-      await service.updateBudget(
+      await service.saveBudgetPlan(
         selection.year,
         selection.month,
-        draft.groupName,
-        adjustmentAmount,
+        {
+          maximumBudget: parsedMaximum,
+          groups: draft.groups.map((group) => ({
+            name: group.name,
+            allocatedBudget: group.allocatedBudget,
+          })),
+        },
       )
+      isEditingRef.current = false
+      setIsEditing(false)
       await load()
-      setStatus('1회 예산 조정을 누적했습니다.')
+      setStatus('예산 편집 내용을 저장했습니다.')
     } catch (saveError) {
       setError(
         saveError instanceof Error
           ? saveError.message
-          : '예산 조정을 저장하지 못했습니다.',
+          : '예산 편집 내용을 저장하지 못했습니다.',
       )
     } finally {
       setIsMutating(false)
     }
   }
 
-  const resetCarryOver = async () => {
-    const groupName = resetGroupName
-    setResetGroupName('')
-    setError('')
-    setIsMutating(true)
-    try {
-      await service.resetBudget(selection.year, selection.month, groupName)
-      await load()
-      setStatus('현재 월 예산을 기준 월예산으로 초기화했습니다.')
-    } catch (resetError) {
-      setError(
-        resetError instanceof Error
-          ? resetError.message
-          : '현재 월 예산을 초기화하지 못했습니다.',
-      )
-    } finally {
-      setIsMutating(false)
+  const requestSave = () => {
+    if (removedGroupNames.length) {
+      setConfirmSave(true)
+      return
     }
+    void applyBudgetPlan()
   }
 
   return (
@@ -252,46 +280,32 @@ export function ConnectedBudgetPage() {
         month={selection.month}
         groups={groups}
         selectedGroupName={selectedGroupName}
-        adjustmentDraft={draft}
-        adjustmentError={error}
+        isEditing={isEditing}
+        editorDraft={draft}
         isBusy={isLoading || isMutating}
         canWrite={service.hasWriteAccess}
         monthNotice={monthControl.notice}
-        adjustmentConfirmation={confirmAdjustment ? {
+        saveConfirmation={confirmSave ? {
           open: true,
-          title: '예산 조정을 적용할까요?',
-          description: `${draft.groupName}의 이번 달 누적 조정에 ${adjustmentAmount.toLocaleString('ko-KR')}원을 더합니다.`,
-          confirmLabel: '적용',
-          busy: isMutating,
-          onConfirm: () => { void applyAdjustment() },
-          onCancel: () => setConfirmAdjustment(false),
-        } : undefined}
-        resetConfirmation={resetGroupName ? {
-          open: true,
-          title: '현재 월 예산을 초기화할까요?',
-          description: '기존 수동조정을 이월 상쇄액으로 교체해 실제예산을 기준 월예산과 같게 만듭니다.',
-          confirmLabel: '초기화',
+          title: '카테고리를 제거하고 저장할까요?',
+          description: `${removedGroupNames.join(', ')} 카테고리를 예산 목록에서 비활성화합니다. 기존 거래 내역은 삭제되지 않습니다.`,
+          confirmLabel: '제거하고 저장',
           busy: isMutating,
           tone: 'danger',
-          onConfirm: () => { void resetCarryOver() },
-          onCancel: () => setResetGroupName(''),
+          onConfirm: () => { void applyBudgetPlan() },
+          onCancel: () => setConfirmSave(false),
         } : undefined}
         canGoPrevious={monthControl.canGoPrevious && !isLoading && !isMutating}
         canGoNext={monthControl.canGoNext && !isLoading && !isMutating}
         onPreviousMonth={() => monthControl.shift(-1)}
         onNextMonth={() => monthControl.shift(1)}
         onSelectGroup={(groupName) => {
-          const nextGroupName = selectedGroupName === groupName ? '' : groupName
-          setSelectedGroupName(nextGroupName)
-          const selected = groups.find((group) => group.group.name === groupName)
-          setDraft({
-            groupName: nextGroupName,
-            amount: nextGroupName && selected ? '0' : '',
-          })
+          setSelectedGroupName(selectedGroupName === groupName ? '' : groupName)
         }}
-        onAdjustmentDraftChange={setDraft}
-        onSubmitAdjustment={submitAdjustment}
-        onRequestResetCarryOver={setResetGroupName}
+        onStartEditing={startEditing}
+        onCancelEditing={cancelEditing}
+        onEditorDraftChange={setDraft}
+        onRequestSave={requestSave}
       />
     </>
   )

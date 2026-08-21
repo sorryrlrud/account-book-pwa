@@ -1,8 +1,8 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { BudgetGroupView } from '@/features/budgets/types.ts'
-import BudgetPage from '@/pages/BudgetPage.tsx'
+import BudgetPage, { type BudgetPageProps } from '@/pages/BudgetPage.tsx'
 
 const GROUP: BudgetGroupView = {
   group: {
@@ -16,6 +16,7 @@ const GROUP: BudgetGroupView = {
     month: 8,
     groupName: '생활비',
     baseSnapshot: 1_000_000,
+    allocatedBudget: 1_000_000,
     carryOver: 100_000,
     adjustment: 0,
     effectiveBudget: 1_100_000,
@@ -24,171 +25,157 @@ const GROUP: BudgetGroupView = {
     nextMonthExpected: 1_660_000,
   },
   details: [
-    { label: '기준 월예산', amount: 1_000_000 },
-    { label: '전월 이월', amount: 100_000 },
-    { label: '이번 달 조정', amount: 0 },
+    { label: '할당 예산', amount: 1_000_000 },
+    { label: '이월 예산', amount: 100_000, signed: true },
+    { label: '사용액', amount: 440_000 },
   ],
 }
 
+function createProps(overrides: Partial<BudgetPageProps> = {}): BudgetPageProps {
+  return {
+    year: 2026,
+    month: 8,
+    groups: [GROUP],
+    editorDraft: {
+      maximumBudget: '1,000,000',
+      groups: [{ name: '생활비', allocatedBudget: 1_000_000 }],
+    },
+    onPreviousMonth: vi.fn(),
+    onNextMonth: vi.fn(),
+    onStartEditing: vi.fn(),
+    onCancelEditing: vi.fn(),
+    onEditorDraftChange: vi.fn(),
+    onRequestSave: vi.fn(),
+    ...overrides,
+  }
+}
+
 describe('BudgetPage', () => {
-  it('shows the total and remaining monthly budget below the month navigator', () => {
-    render(
-      <BudgetPage
-        year={2026}
-        month={8}
-        groups={[GROUP]}
-        adjustmentDraft={{ groupName: '', amount: '' }}
-        onPreviousMonth={vi.fn()}
-        onNextMonth={vi.fn()}
-        onAdjustmentDraftChange={vi.fn()}
-        onSubmitAdjustment={vi.fn()}
-        onRequestResetCarryOver={vi.fn()}
-      />,
-    )
+  it('keeps the read view compact and exposes editing from the title', async () => {
+    const user = userEvent.setup()
+    const onStartEditing = vi.fn()
+    const onSelectGroup = vi.fn()
+    const props = createProps({ onStartEditing, onSelectGroup })
+    const { rerender } = render(<BudgetPage {...props} />)
 
     const totals = screen.getByRole('heading', { name: '이달 예산 계' }).closest('section')!
     expect(within(totals).getByText('총 예산')).toBeVisible()
     expect(within(totals).getByText('1,100,000원')).toBeVisible()
     expect(within(totals).getByText('남은 예산')).toBeVisible()
     expect(within(totals).getByText('660,000원')).toBeVisible()
-  })
 
-  it('shows a loading message instead of the empty state while loading', () => {
-    render(
-      <BudgetPage
-        year={2026}
-        month={8}
-        groups={[]}
-        adjustmentDraft={{ groupName: '', amount: '' }}
-        isBusy
-        onPreviousMonth={vi.fn()}
-        onNextMonth={vi.fn()}
-        onAdjustmentDraftChange={vi.fn()}
-        onSubmitAdjustment={vi.fn()}
-        onRequestResetCarryOver={vi.fn()}
-      />,
-    )
-
-    expect(screen.getByText('불러오는 중입니다.')).toBeVisible()
-    expect(screen.queryByText('표시할 예산 그룹이 없습니다.')).not.toBeInTheDocument()
-  })
-
-  it('keeps each budget compact until its card is selected', async () => {
-    const user = userEvent.setup()
-    const onSelectGroup = vi.fn()
-    const props = {
-      year: 2026,
-      month: 8,
-      groups: [GROUP],
-      adjustmentDraft: { groupName: '', amount: '' },
-      onPreviousMonth: vi.fn(),
-      onNextMonth: vi.fn(),
-      onSelectGroup,
-      onAdjustmentDraftChange: vi.fn(),
-      onSubmitAdjustment: vi.fn(),
-      onRequestResetCarryOver: vi.fn(),
-    }
-
-    const { rerender } = render(<BudgetPage {...props} />)
-
-    expect(screen.getByRole('button', { name: /생활비/ })).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('상세 및 조정')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '편집' }))
+    expect(onStartEditing).toHaveBeenCalledOnce()
 
     await user.click(screen.getByRole('button', { name: /생활비/ }))
     expect(onSelectGroup).toHaveBeenCalledWith('생활비')
+    rerender(<BudgetPage {...props} selectedGroupName="생활비" />)
 
-    rerender(
-      <BudgetPage
-        {...props}
-        selectedGroupName="생활비"
-        adjustmentDraft={{ groupName: '생활비', amount: '0' }}
-      />,
-    )
-
-    expect(screen.getByRole('button', { name: /생활비/ })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('상세 및 조정')).toBeVisible()
-    expect(screen.getByLabelText('이번 달 수동조정')).toHaveValue('0')
-    expect(screen.queryByRole('button', { name: '기준예산 변경 확인' })).not.toBeInTheDocument()
-    expect(screen.queryByText(/저장된 수동조정 금액/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '이월 금액 초기화' })).toBeVisible()
+    expect(screen.getByText('할당 예산')).toBeVisible()
+    expect(screen.getByText('이월 예산')).toBeVisible()
+    expect(screen.getByText('다음 달 이월 예상')).toBeVisible()
+    expect(screen.queryByText('상세 및 조정')).not.toBeInTheDocument()
+    expect(screen.queryByText('이번 달 수동조정')).not.toBeInTheDocument()
   })
 
-  it('fills the bar by the remaining ratio and combines usage amounts below it', () => {
-    const { container } = render(
-      <BudgetPage
-        year={2026}
-        month={8}
-        groups={[GROUP]}
-        adjustmentDraft={{ groupName: '', amount: '' }}
-        onPreviousMonth={vi.fn()}
-        onNextMonth={vi.fn()}
-        onAdjustmentDraftChange={vi.fn()}
-        onSubmitAdjustment={vi.fn()}
-        onRequestResetCarryOver={vi.fn()}
-      />,
-    )
+  it('formats the maximum, uses a 50000 slider step, and fine-tunes by 10000', async () => {
+    const user = userEvent.setup()
+    const onEditorDraftChange = vi.fn()
+    render(<BudgetPage {...createProps({ isEditing: true, onEditorDraftChange })} />)
 
-    expect(container.querySelector('.budget-group-card__progress-value')).toHaveStyle({
-      width: '60%',
-    })
-    expect(screen.getByText('60% 남음 (660,000 / 1,100,000원)')).toBeVisible()
-    expect(screen.queryByText('전체')).not.toBeInTheDocument()
+    const maximumInput = screen.getByRole('textbox', { name: '최대 예산' })
+    expect(maximumInput).toHaveValue('1,000,000')
+    await user.clear(maximumInput)
+    await user.type(maximumInput, '2000000')
+    expect(onEditorDraftChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      maximumBudget: expect.stringMatching(/[0-9,]+/),
+    }))
+
+    const slider = screen.getByRole('slider', { name: '생활비 할당 예산' })
+    expect(slider).toHaveAttribute('step', '50000')
+    fireEvent.change(slider, { target: { value: '950000' } })
+    expect(onEditorDraftChange).toHaveBeenCalledWith(expect.objectContaining({
+      groups: [expect.objectContaining({ allocatedBudget: 950_000 })],
+    }))
+
+    await user.click(screen.getByRole('button', { name: '생활비 1만원 줄이기' }))
+    expect(onEditorDraftChange).toHaveBeenCalledWith(expect.objectContaining({
+      groups: [expect.objectContaining({ allocatedBudget: 990_000 })],
+    }))
   })
 
-  it('shows a full remaining bar when none of the available budget was used', () => {
-    const unusedGroup: BudgetGroupView = {
-      ...GROUP,
-      monthly: {
-        ...GROUP.monthly,
-        spent: 0,
-        remaining: 1_100_000,
+  it('disables saving when allocations exceed the maximum', () => {
+    render(<BudgetPage {...createProps({
+      isEditing: true,
+      editorDraft: {
+        maximumBudget: '900,000',
+        groups: [{ name: '생활비', allocatedBudget: 1_000_000 }],
       },
-    }
-    const { container } = render(
-      <BudgetPage
-        year={2026}
-        month={8}
-        groups={[unusedGroup]}
-        adjustmentDraft={{ groupName: '', amount: '' }}
-        onPreviousMonth={vi.fn()}
-        onNextMonth={vi.fn()}
-        onAdjustmentDraftChange={vi.fn()}
-        onSubmitAdjustment={vi.fn()}
-        onRequestResetCarryOver={vi.fn()}
-      />,
-    )
+    })} />)
 
-    expect(container.querySelector('.budget-group-card__progress-value')).toHaveStyle({
-      width: '100%',
-    })
-    expect(screen.getByText('100% 남음 (1,100,000 / 1,100,000원)')).toBeVisible()
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent('100,000원 많습니다')
   })
 
-  it('accepts a one-time delta even when a different adjustment total is already stored', () => {
-    const adjustedGroup: BudgetGroupView = {
-      ...GROUP,
-      monthly: {
-        ...GROUP.monthly,
-        adjustment: 50_000,
-        effectiveBudget: 1_150_000,
-        remaining: 710_000,
+  it('allows saving with an unallocated remainder and explains it below the title action', () => {
+    render(<BudgetPage {...createProps({
+      isEditing: true,
+      editorDraft: {
+        maximumBudget: '1,200,000',
+        groups: [{ name: '생활비', allocatedBudget: 1_000_000 }],
       },
-    }
-    render(
-      <BudgetPage
-        year={2026}
-        month={8}
-        groups={[adjustedGroup]}
-        selectedGroupName="생활비"
-        adjustmentDraft={{ groupName: '생활비', amount: '100000' }}
-        onPreviousMonth={vi.fn()}
-        onNextMonth={vi.fn()}
-        onAdjustmentDraftChange={vi.fn()}
-        onSubmitAdjustment={vi.fn()}
-        onRequestResetCarryOver={vi.fn()}
-      />,
-    )
+    })} />)
 
-    expect(screen.getByRole('button', { name: '조정 적용 확인' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '저장' })).toBeEnabled()
+    expect(screen.getByText(/미할당 예산 200,000원/)).toBeVisible()
+  })
+
+  it('adds and removes budget categories in the draft', async () => {
+    const user = userEvent.setup()
+    const onEditorDraftChange = vi.fn()
+    render(<BudgetPage {...createProps({ isEditing: true, onEditorDraftChange })} />)
+
+    await user.type(screen.getByRole('textbox', { name: '새 카테고리 이름' }), '여행')
+    await user.click(screen.getByRole('button', { name: '추가' }))
+    expect(onEditorDraftChange).toHaveBeenCalledWith(expect.objectContaining({
+      groups: expect.arrayContaining([
+        expect.objectContaining({ name: '여행', allocatedBudget: 0, isNew: true }),
+      ]),
+    }))
+
+    await user.click(screen.getByRole('button', { name: '생활비 제거' }))
+    expect(onEditorDraftChange).toHaveBeenLastCalledWith(expect.objectContaining({ groups: [] }))
+  })
+
+  it('reorders categories from the drag handle', () => {
+    const onEditorDraftChange = vi.fn()
+    render(<BudgetPage {...createProps({
+      isEditing: true,
+      onEditorDraftChange,
+      editorDraft: {
+        maximumBudget: '1,500,000',
+        groups: [
+          { name: '생활비', allocatedBudget: 1_000_000 },
+          { name: '반려동물', allocatedBudget: 500_000 },
+        ],
+      },
+    })} />)
+
+    fireEvent.dragStart(screen.getByRole('button', { name: '생활비 길게 눌러 순서 변경' }))
+    fireEvent.dragEnter(screen.getByRole('heading', { name: '반려동물' }).closest('article')!)
+
+    expect(onEditorDraftChange).toHaveBeenCalledWith(expect.objectContaining({
+      groups: [
+        expect.objectContaining({ name: '반려동물' }),
+        expect.objectContaining({ name: '생활비' }),
+      ],
+    }))
+  })
+
+  it('shows loading instead of the empty state while data is loading', () => {
+    render(<BudgetPage {...createProps({ groups: [], isBusy: true })} />)
+
+    expect(screen.getByText('불러오는 중입니다.')).toBeVisible()
+    expect(screen.queryByText('표시할 예산 그룹이 없습니다.')).not.toBeInTheDocument()
   })
 })

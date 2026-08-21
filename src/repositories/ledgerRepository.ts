@@ -2,6 +2,7 @@ import type { Account, AccountMutation } from '@/domain/account.ts'
 import type {
   BudgetGroup,
   BudgetGroupMutation,
+  BudgetPlanMutation,
   MonthlyBudget,
   MonthlyBudgetSource,
 } from '@/domain/budget.ts'
@@ -42,8 +43,8 @@ export interface LedgerRepository {
   createBudgetGroup(year: number, input: BudgetGroupMutation): Promise<BudgetGroup>
   getMonthlyBudgetSources(year: number): Promise<MonthlyBudgetSource[]>
   getMonthlyBudgets(year: number, month: number): Promise<MonthlyBudget[]>
-  addBudgetAdjustment(year: number, month: number, groupName: string, adjustment: number): Promise<void>
-  resetBudgetCarryOver(year: number, month: number, groupName: string): Promise<void>
+  getMonthlyBudgetMaximum(year: number, month: number): Promise<number | undefined>
+  saveBudgetPlan(year: number, month: number, input: BudgetPlanMutation): Promise<void>
   linkYear(request: YearLinkRequest): Promise<LinkedYear[]>
   syncMonthZero(year: number): Promise<void>
   getSettlement(year: number, month: number): Promise<SettlementSummary>

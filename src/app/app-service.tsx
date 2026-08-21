@@ -41,10 +41,8 @@ export function AppServiceProvider({ children }: { children: ReactNode }) {
       controller.updateTransaction(transaction, draft),
     deleteTransaction: (transaction) => controller.deleteTransaction(transaction),
     getBudgets: (year, month) => controller.getBudgets(year, month),
-    updateBudget: (year, month, groupName, adjustment) =>
-      controller.updateBudget(year, month, groupName, adjustment),
-    resetBudget: (year, month, groupName) =>
-      controller.resetBudget(year, month, groupName),
+    getBudgetMaximum: (year, month) => controller.getBudgetMaximum(year, month),
+    saveBudgetPlan: (year, month, input) => controller.saveBudgetPlan(year, month, input),
     getSettingsData: (year) => controller.getSettingsData(year),
     createBudgetGroup: (year, input) => controller.createBudgetGroup(year, input),
     createAccount: (year, input) => controller.createAccount(year, input),

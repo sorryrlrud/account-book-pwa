@@ -3,6 +3,7 @@ import type { BudgetSummary } from '@/domain'
 export interface BudgetDetailItem {
   label: string
   amount: number
+  signed?: boolean
   emphasis?: 'default' | 'positive' | 'negative'
 }
 
@@ -11,12 +12,18 @@ export interface BudgetGroupView extends BudgetSummary {
   note?: string
 }
 
-export interface BudgetAdjustmentDraft {
-  groupName: string
-  amount: string
+export interface BudgetEditorGroup {
+  name: string
+  allocatedBudget: number
+  isNew?: boolean
 }
 
-export interface BudgetAdjustmentConfirmation {
+export interface BudgetEditorDraft {
+  maximumBudget: string
+  groups: BudgetEditorGroup[]
+}
+
+export interface BudgetConfirmation {
   open: boolean
   title: string
   description: string

@@ -3,6 +3,7 @@ import type { Account, AccountMutation } from '@/domain/account.ts'
 import type {
   BudgetGroup,
   BudgetGroupMutation,
+  BudgetPlanMutation,
   MonthlyBudget,
 } from '@/domain/budget.ts'
 import type { Category, CategoryMutation } from '@/domain/category.ts'
@@ -91,13 +92,8 @@ export interface AppService extends AppServiceState {
   ): Promise<SavedTransactionResult>
   deleteTransaction(transaction: Transaction): Promise<void>
   getBudgets(year: number, month: number): Promise<MonthlyBudget[]>
-  updateBudget(
-    year: number,
-    month: number,
-    groupName: string,
-    adjustment: number,
-  ): Promise<void>
-  resetBudget(year: number, month: number, groupName: string): Promise<void>
+  getBudgetMaximum(year: number, month: number): Promise<number | undefined>
+  saveBudgetPlan(year: number, month: number, input: BudgetPlanMutation): Promise<void>
   getSettingsData(year: number): Promise<SettingsData>
   createBudgetGroup(year: number, input: BudgetGroupMutation): Promise<BudgetGroup>
   createAccount(year: number, input: AccountMutation): Promise<Account>
@@ -187,11 +183,11 @@ class UnconfiguredAppService implements AppService {
     throw new Error(UNCONFIGURED_MESSAGE)
   }
 
-  async updateBudget(): Promise<void> {
+  async getBudgetMaximum(): Promise<number | undefined> {
     throw new Error(UNCONFIGURED_MESSAGE)
   }
 
-  async resetBudget(): Promise<void> {
+  async saveBudgetPlan(): Promise<void> {
     throw new Error(UNCONFIGURED_MESSAGE)
   }
 
