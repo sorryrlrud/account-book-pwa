@@ -139,6 +139,7 @@ export function HistoryPage() {
   const statistics = useMemo(() => {
     const totals = new Map<string, number>()
     for (const transaction of transactions) {
+      if (transaction.type === 'transfer') continue
       if (statisticsType !== 'account' && transaction.type !== statisticsType) continue
       const label = statisticsType === 'account'
         ? transaction.account.trim()

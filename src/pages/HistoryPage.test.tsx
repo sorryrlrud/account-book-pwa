@@ -41,6 +41,19 @@ function renderHistory(overrides: Partial<AppService> = {}) {
       sourceMonth: 8,
       sourceRow: 4,
     },
+    {
+      id: 'transfer-1',
+      transferId: 'transfer-pair-1',
+      type: 'transfer',
+      date: '2026-08-10',
+      amount: -1_000_000,
+      description: '저축 이체',
+      account: '생활비 카드',
+      destinationAccount: '저축 통장',
+      sourceYear: 2026,
+      sourceMonth: 8,
+      sourceRow: 5,
+    },
   ])
   const service: AppService = {
     ...defaultAppService,
@@ -113,7 +126,7 @@ describe('HistoryPage', () => {
     expect(screen.getByRole('tab', { name: '수입' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('shows totals by account across transaction types', async () => {
+  it('shows totals by account across non-transfer transaction types', async () => {
     const user = userEvent.setup()
     renderHistory()
 
