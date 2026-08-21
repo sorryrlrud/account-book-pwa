@@ -69,6 +69,7 @@ function renderHistory(overrides: Partial<AppService> = {}) {
         spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/sheet-2026/edit',
         year: 2026,
         schemaVersion: 1,
+        budgetStartMonth: 1,
       }]]),
     }),
     listTransactions,

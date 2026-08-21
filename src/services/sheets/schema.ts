@@ -59,6 +59,7 @@ export function parseYearConfig(
 
   const year = Number(kv.get('year'))
   const schemaVersion = Number(kv.get('schemaVersion'))
+  const budgetStartMonth = Number(kv.get('budgetStartMonth') || 1)
   if (!Number.isInteger(year) || !Number.isInteger(schemaVersion)) {
     throw new AppError(
       'INVALID_CONFIG',
@@ -80,11 +81,20 @@ export function parseYearConfig(
     )
   }
 
+  if (!Number.isInteger(budgetStartMonth) || budgetStartMonth < 1 || budgetStartMonth > 12) {
+    throw new AppError(
+      'INVALID_CONFIG',
+      '앱설정의 예산 시작 월을 확인해주세요.',
+      { details: { budgetStartMonth: kv.get('budgetStartMonth') } },
+    )
+  }
+
   return {
     spreadsheetId,
     spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
     year,
     schemaVersion,
+    budgetStartMonth,
     environment: kv.get('environment') || undefined,
     previousSpreadsheetId: kv.get('previousSpreadsheetId') || undefined,
     nextSpreadsheetId: kv.get('nextSpreadsheetId') || undefined,

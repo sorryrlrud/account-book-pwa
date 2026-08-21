@@ -25,6 +25,7 @@ export interface WorkbookSeed {
   previousSpreadsheetId?: string
   nextSpreadsheetId?: string
   environment?: string
+  budgetStartMonth?: number
   createdAt?: string
   updatedAt?: string
   sheetValues?: Partial<Record<string, string[][]>>
@@ -381,6 +382,7 @@ function defaultSheetValues(sheetName: string, seed: WorkbookSeed): string[][] {
       ['key', 'value'],
       ['year', String(seed.year)],
       ['schemaVersion', '1'],
+      ['budgetStartMonth', String(seed.budgetStartMonth ?? 1)],
       ['environment', seed.environment ?? 'TEST'],
       ['previousSpreadsheetId', seed.previousSpreadsheetId ?? ''],
       ['nextSpreadsheetId', seed.nextSpreadsheetId ?? ''],
@@ -407,8 +409,8 @@ function defaultSheetValues(sheetName: string, seed: WorkbookSeed): string[][] {
 
   if (sheetName === '예산그룹') {
     return [
-      ['name', 'baseMonthlyBudget', 'active', 'order'],
-      ['Living', '1000000', 'TRUE', '1'],
+      ['name', 'baseMonthlyBudget', 'active', 'order', 'startMonth'],
+      ['Living', '1000000', 'TRUE', '1', '1'],
     ]
   }
 

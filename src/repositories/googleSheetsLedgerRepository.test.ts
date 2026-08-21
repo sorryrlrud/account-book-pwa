@@ -845,7 +845,7 @@ describe('GoogleSheetsLedgerRepository', () => {
     expect(budgets.find((budget) => budget.groupName === 'Living')?.spent).toBe(36000)
     expect(fakeSheetsClient.batchGetValuesCalls).toHaveLength(1)
     expect(fakeSheetsClient.batchGetValuesCalls[0]?.ranges).toEqual([
-      buildRange('예산그룹', 'A:D'),
+      buildRange('예산그룹', 'A:E'),
       buildRange('카테고리', 'A:D'),
       buildRange('예산월별', 'A:D'),
       ...Array.from({ length: 8 }, (_, index) => buildRange(String(index + 1), 'A:Z')),
@@ -865,8 +865,8 @@ describe('GoogleSheetsLedgerRepository', () => {
 
     expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(1)
     expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산그룹')).toEqual(expect.arrayContaining([
-      ['Living', '1000000', 'TRUE', '1'],
-      ['Travel', '100000', 'TRUE', '2'],
+      ['Living', '1000000', 'TRUE', '1', '1'],
+      ['Travel', '100000', 'TRUE', '2', '8'],
     ]))
     expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산월별')).toEqual(expect.arrayContaining([
       ['8', 'Living', '800000', '0'],
@@ -887,8 +887,8 @@ describe('GoogleSheetsLedgerRepository', () => {
       ],
     })
     expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산그룹')).toEqual(expect.arrayContaining([
-      ['Living', '1000000', 'TRUE', '2'],
-      ['Travel', '100000', 'TRUE', '1'],
+      ['Living', '1000000', 'TRUE', '2', '1'],
+      ['Travel', '100000', 'TRUE', '1', '8'],
     ]))
     expect(
       fakeSheetsClient.getSheetValues('sheet-2026', '예산월별')
@@ -909,6 +909,7 @@ describe('GoogleSheetsLedgerRepository', () => {
       '1000000',
       'FALSE',
       '1',
+      '1',
     ])
     expect(await repository.getMonthlyBudgets(2026, 8)).toEqual([])
   })
@@ -916,14 +917,77 @@ describe('GoogleSheetsLedgerRepository', () => {
   it('creates budget groups', async () => {
     const { repository, fakeSheetsClient } = createHarness()
 
-    await repository.createBudgetGroup(2026, { name: 'Travel', baseMonthlyBudget: 250000 })
+    await repository.createBudgetGroup(2026, {
+      name: 'Travel',
+      baseMonthlyBudget: 250000,
+      startMonth: 8,
+    })
 
     expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산그룹').at(-1)).toEqual([
       'Travel',
       '250000',
       'TRUE',
       '2',
+      '8',
     ])
+  })
+
+  it('ignores pre-start transactions and rolls the first budget month into the next month', async () => {
+    const workbooks = createDefaultWorkbooks()
+    const currentWorkbook = workbooks.find((workbook) => workbook.spreadsheetId === 'sheet-2026')
+    if (!currentWorkbook) throw new Error('Missing current workbook fixture')
+    currentWorkbook.budgetStartMonth = 8
+    currentWorkbook.sheetValues = {
+      ...currentWorkbook.sheetValues,
+      예산그룹: [
+        ['name', 'baseMonthlyBudget', 'active', 'order', 'startMonth'],
+        ['Living', '1000000', 'TRUE', '1', '8'],
+      ],
+      '8': [
+        [],
+        buildTransactionRow({
+          date: '2026-08-10',
+          amount: -800000,
+          description: 'August spending',
+          account: 'Checking',
+          category: 'Bills',
+          type: 'expense',
+        }),
+      ],
+    }
+    const { repository } = createHarness({ workbooks })
+
+    await expect(repository.getMonthlyBudgets(2026, 7)).resolves.toEqual([])
+    await expect(repository.getMonthlyBudgets(2026, 8)).resolves.toEqual([
+      expect.objectContaining({
+        groupName: 'Living',
+        carryOver: 0,
+        effectiveBudget: 1_000_000,
+        spent: 800_000,
+        remaining: 200_000,
+      }),
+    ])
+    await expect(repository.getMonthlyBudgets(2026, 9)).resolves.toEqual([
+      expect.objectContaining({
+        groupName: 'Living',
+        carryOver: 200_000,
+        effectiveBudget: 1_200_000,
+      }),
+    ])
+  })
+
+  it('rejects editing a month before the configured budget start', async () => {
+    const workbooks = createDefaultWorkbooks()
+    const currentWorkbook = workbooks.find((workbook) => workbook.spreadsheetId === 'sheet-2026')
+    if (!currentWorkbook) throw new Error('Missing current workbook fixture')
+    currentWorkbook.budgetStartMonth = 8
+    const { repository, fakeSheetsClient } = createHarness({ workbooks })
+
+    await expect(repository.saveBudgetPlan(2026, 7, {
+      maximumBudget: 1_000_000,
+      groups: [{ name: 'Living', allocatedBudget: 1_000_000 }],
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' })
+    expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(0)
   })
 
   it('rejects a budget save when the monthly source is duplicated', async () => {

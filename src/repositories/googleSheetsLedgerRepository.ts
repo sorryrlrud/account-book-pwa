@@ -474,7 +474,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
   async getBudgetGroups(year: number): Promise<BudgetGroup[]> {
     const config = await this.#resolveYearConfig(year)
-    const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산그룹', 'A:D'))
+    const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산그룹', 'A:E'))
     return parseBudgetGroups(range)
   }
 
@@ -488,18 +488,28 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     if (!Number.isFinite(input.baseMonthlyBudget) || input.baseMonthlyBudget < 0) {
       throw new AppError('VALIDATION_ERROR', '기준 월예산을 확인해주세요.')
     }
+    if (!Number.isInteger(input.startMonth) || input.startMonth < config.budgetStartMonth || input.startMonth > 12) {
+      throw new AppError('VALIDATION_ERROR', '예산 시작 월을 확인해주세요.')
+    }
     if (groups.some((group) => group.name === name)) {
       throw new AppError('VALIDATION_ERROR', '같은 이름의 예산 그룹이 이미 있습니다.')
     }
 
     const nextOrder = Math.max(0, ...groups.map((group) => group.order)) + 1
-    await this.#sheetsClient.appendValues(config.spreadsheetId, buildRange('예산그룹', 'A:D'), [[
+    await this.#sheetsClient.appendValues(config.spreadsheetId, buildRange('예산그룹', 'A:E'), [[
       toUserEnteredLiteral(name),
       String(input.baseMonthlyBudget),
       'TRUE',
       String(nextOrder),
+      String(input.startMonth),
     ]])
-    return { name, baseMonthlyBudget: input.baseMonthlyBudget, active: true, order: nextOrder }
+    return {
+      name,
+      baseMonthlyBudget: input.baseMonthlyBudget,
+      startMonth: input.startMonth,
+      active: true,
+      order: nextOrder,
+    }
   }
 
   async getMonthlyBudgetSources(year: number): Promise<MonthlyBudgetSource[]> {
@@ -511,7 +521,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
   async getMonthlyBudgets(year: number, month: number): Promise<MonthlyBudget[]> {
     const config = await this.#resolveYearConfig(year)
     const ranges = [
-      buildRange('예산그룹', 'A:D'),
+      buildRange('예산그룹', 'A:E'),
       buildRange('카테고리', 'A:D'),
       buildRange('예산월별', 'A:D'),
       ...Array.from({ length: month }, (_, index) =>
@@ -538,6 +548,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       monthlySources,
       transactionsByMonth,
       monthZeroCarryOvers,
+      config.budgetStartMonth,
     )
 
     return timeline.filter((item) => item.month === month)
@@ -584,8 +595,14 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     }
 
     const config = await this.#resolveYearConfig(year)
+    if (month < config.budgetStartMonth) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `${config.year}년 예산은 ${config.budgetStartMonth}월부터 편집할 수 있습니다.`,
+      )
+    }
     const [groupRange, monthlyRange] = await Promise.all([
-      this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산그룹', 'A:D')),
+      this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산그룹', 'A:E')),
       this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D')),
     ])
     const groupRows = groupRange.values ?? []
@@ -608,26 +625,36 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       const baseMonthlyBudget = existing
         ? parseSheetNumber(existing.row[1])
         : group.allocatedBudget
+      const startMonth = existing
+        ? (parseSheetNumber(existing.row[4]) || config.budgetStartMonth)
+        : month
       updates.push({
-        range: buildRowRange('예산그룹', rowNumber, 'A:D'),
+        range: buildRowRange('예산그룹', rowNumber, 'A:E'),
         values: [[
           toUserEnteredLiteral(group.name),
           String(baseMonthlyBudget),
           'TRUE',
           String(index + 1),
+          String(startMonth),
         ]],
       })
     }
 
     for (const [name, existing] of existingGroupRows) {
-      if (!requestedNames.has(name) && normalizeBooleanCell(existing.row[2])) {
+      const startMonth = parseSheetNumber(existing.row[4]) || config.budgetStartMonth
+      if (
+        !requestedNames.has(name) &&
+        normalizeBooleanCell(existing.row[2]) &&
+        startMonth <= month
+      ) {
         updates.push({
-          range: buildRowRange('예산그룹', existing.rowNumber, 'A:D'),
+          range: buildRowRange('예산그룹', existing.rowNumber, 'A:E'),
           values: [[
             toUserEnteredLiteral(name),
             String(parseSheetNumber(existing.row[1])),
             'FALSE',
             String(parseSheetNumber(existing.row[3])),
+            String(startMonth),
           ]],
         })
       }
@@ -1259,6 +1286,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       ['key', 'value'],
       ['year', String(config.year)],
       ['schemaVersion', String(config.schemaVersion)],
+      ['budgetStartMonth', String(config.budgetStartMonth)],
       ['environment', toUserEnteredLiteral(config.environment ?? '')],
       ['previousSpreadsheetId', toUserEnteredLiteral(config.previousSpreadsheetId ?? '')],
       ['nextSpreadsheetId', toUserEnteredLiteral(config.nextSpreadsheetId ?? '')],

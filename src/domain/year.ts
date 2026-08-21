@@ -3,6 +3,7 @@ export interface YearConfig {
   spreadsheetUrl: string
   year: number
   schemaVersion: number
+  budgetStartMonth: number
   environment?: string
   previousSpreadsheetId?: string
   nextSpreadsheetId?: string

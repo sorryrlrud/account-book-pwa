@@ -218,7 +218,7 @@ export default function SettingsPage({
               <span>
                 {group.name}
                 <small className="settings-page__item-meta">
-                  기준 월예산 · {group.baseMonthlyBudget.toLocaleString('ko-KR')}원
+                  기준 월예산 · {group.baseMonthlyBudget.toLocaleString('ko-KR')}원 · {group.startMonth}월부터
                 </small>
               </span>
             </article>

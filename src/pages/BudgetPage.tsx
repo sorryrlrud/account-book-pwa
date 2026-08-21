@@ -11,6 +11,7 @@ import { MonthNavigator } from '@/features/readViews/components/MonthNavigator'
 export interface BudgetPageProps {
   year: number
   month: number
+  budgetStartMonth?: number
   canGoPrevious?: boolean
   canGoNext?: boolean
   groups: BudgetGroupView[]
@@ -81,6 +82,7 @@ function formatAmountInput(value: string): string {
 export default function BudgetPage({
   year,
   month,
+  budgetStartMonth = 1,
   canGoPrevious = true,
   canGoNext = true,
   groups,
@@ -105,6 +107,7 @@ export default function BudgetPage({
   const longPressTimer = useRef<number | undefined>(undefined)
   const dragGroupName = useRef('')
   const selectedGroup = groups.find((group) => group.group.name === selectedGroupName)
+  const isBeforeBudgetStart = month < budgetStartMonth
   const totalBudget = groups.reduce((sum, group) => sum + group.monthly.effectiveBudget, 0)
   const totalRemaining = groups.reduce((sum, group) => sum + group.monthly.remaining, 0)
   const parsedMaximum = parseAmount(editorDraft.maximumBudget)
@@ -232,7 +235,7 @@ export default function BudgetPage({
                 type="button"
                 className="secondary-button budget-page__edit-button"
                 onClick={onStartEditing}
-                disabled={isBusy || !canWrite}
+                disabled={isBusy || !canWrite || isBeforeBudgetStart}
               >
                 편집
               </button>
@@ -298,12 +301,19 @@ export default function BudgetPage({
             <p className="form-status">Google 로그인과 Sheet 접근 확인이 완료되면 예산을 변경할 수 있습니다.</p>
           ) : null}
         </section>
+      ) : isBeforeBudgetStart ? (
+        <section className="panel budget-page__totals" aria-labelledby="budget-start-title">
+          <h3 id="budget-start-title" className="budget-page__totals-title">예산 관리 시작 전</h3>
+          <p className="form-status">
+            {year}년 예산은 {budgetStartMonth}월부터 계산하며, 이전 달의 예산과 거래는 이월하지 않습니다.
+          </p>
+        </section>
       ) : (
         <section className="panel budget-page__totals" aria-labelledby="budget-totals-title">
           <h3 id="budget-totals-title" className="budget-page__totals-title">이달 예산 계</h3>
           <div className="budget-page__total-grid">
             <div className="budget-page__total budget-page__total--budget">
-              <span>총 예산</span>
+              <span>총 사용 가능액</span>
               <strong>{formatCurrency(totalBudget)}</strong>
             </div>
             <div className={`budget-page__total budget-page__total--remaining${totalRemaining < 0 ? ' is-negative' : ''}`}>
@@ -449,7 +459,11 @@ export default function BudgetPage({
             />
           )) : (
             <p className="budget-page__empty" role="status">
-              {isBusy ? '불러오는 중입니다.' : '표시할 예산 그룹이 없습니다.'}
+              {isBusy
+                ? '불러오는 중입니다.'
+                : isBeforeBudgetStart
+                  ? `${budgetStartMonth}월부터 예산을 계산합니다.`
+                  : '표시할 예산 그룹이 없습니다.'}
             </p>
           )}
         </section>

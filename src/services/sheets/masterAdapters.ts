@@ -36,6 +36,7 @@ export function parseBudgetGroups(range: SheetsValueRange): BudgetGroup[] {
     .map((row) => ({
       name: trimCell(row[0]),
       baseMonthlyBudget: parseSheetNumber(row[1]),
+      startMonth: parseSheetNumber(row[4]) || 1,
       active: normalizeBooleanCell(row[2]),
       order: parseSheetNumber(row[3]),
     }))

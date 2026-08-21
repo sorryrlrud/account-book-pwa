@@ -6,12 +6,14 @@ export const sampleBudgetGroups: BudgetGroup[] = [
   {
     name: '생활비',
     baseMonthlyBudget: 1_500_000,
+    startMonth: 1,
     active: true,
     order: 1,
   },
   {
     name: '반려동물',
     baseMonthlyBudget: 500_000,
+    startMonth: 1,
     active: true,
     order: 2,
   },

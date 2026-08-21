@@ -11,6 +11,8 @@
   - UI 양수 normalization
 - `src/domain/budget.test.ts`
   - 예산 이월
+  - 연중 예산 시작과 시작 전 거래 제외
+  - 신규 그룹의 생성 월 이전 소급 이월 방지
   - 예산 초과
   - 레거시 수동조정의 할당액 보존
   - 0월 carry-over
@@ -57,12 +59,13 @@
   - transaction/transfer 삭제
   - 통장/카테고리 load, rename 범위, 사용중지
   - 월별 최대 예산, 카테고리 할당·순서·추가·비활성화 일괄 저장
+  - 설정된 예산 시작 월 이전 편집 차단과 시작 월 이후 자동 이월
   - 최대 예산 초과 및 중복 월별 행 쓰기 차단
   - 연도 그래프, 인접 연도 연결, 설정된 workbook 대상 검증
   - `12월 -> 0월` 거래 snapshot과 예산 잔여 동기화
   - `0!AB:AC` 시작잔액 기반 정산과 optional 투자/에너지 graceful failure
 - `src/services/sheets/schema.test.ts`
-  - 필수 탭, year/schemaVersion, 연결 설정 parsing
+  - 필수 탭, year/schemaVersion/budgetStartMonth, 연결 설정 parsing
 - `src/features/transactions/TransactionForm.test.tsx`
   - 필수값 전 save disabled
   - 저장 후 날짜/통장 유지와 금액/내용/카테고리 초기화

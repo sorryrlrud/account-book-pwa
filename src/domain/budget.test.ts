@@ -81,6 +81,7 @@ describe('budget domain helpers', () => {
         {
           name: '생활비',
           baseMonthlyBudget: 5_000_000,
+          startMonth: 1,
           active: true,
           order: 1,
         },
@@ -162,5 +163,73 @@ describe('budget domain helpers', () => {
     })
 
     expect(budgets).toEqual([])
+  })
+
+  it('starts a midyear budget with zero carry-over and rolls forward from there', () => {
+    const transactionsByMonth = new Map<number, ReturnType<typeof createExpenseTransaction>[]>(
+      Array.from({ length: 9 }, (_, index) => [index + 1, []]),
+    )
+    transactionsByMonth.set(8, [
+      createExpenseTransaction({ sourceMonth: 8, amount: -800_000 }),
+    ])
+
+    const timeline = buildBudgetTimeline(
+      2026,
+      sampleBudgetGroups,
+      sampleCategories,
+      sampleMonthlySources,
+      transactionsByMonth,
+      { 생활비: 900_000 },
+      8,
+    )
+
+    expect(timeline.some((budget) => budget.month === 7)).toBe(false)
+    expect(timeline.find((budget) => budget.month === 8 && budget.groupName === '생활비'))
+      .toMatchObject({ carryOver: 0, effectiveBudget: 1_500_000, remaining: 700_000 })
+    expect(timeline.find((budget) => budget.month === 9 && budget.groupName === '생활비'))
+      .toMatchObject({ carryOver: 700_000, effectiveBudget: 2_200_000 })
+  })
+
+  it('does not allocate a newly added group before its own start month', () => {
+    const groups = [{
+      name: '여행',
+      baseMonthlyBudget: 500_000,
+      startMonth: 8,
+      active: true,
+      order: 1,
+    }]
+    const transactionsByMonth = new Map<number, ReturnType<typeof createExpenseTransaction>[]>(
+      Array.from({ length: 8 }, (_, index) => [index + 1, []]),
+    )
+
+    const timeline = buildBudgetTimeline(
+      2026,
+      groups,
+      [],
+      [{ month: 8, groupName: '여행', baseSnapshot: 500_000, adjustment: 0 }],
+      transactionsByMonth,
+      undefined,
+      1,
+    )
+
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0]).toMatchObject({ month: 8, carryOver: 0, effectiveBudget: 500_000 })
+  })
+
+  it('uses a saved next-month allocation in the next-month expectation', () => {
+    const budgets = calculateMonthlyBudgets({
+      year: 2026,
+      month: 8,
+      groups: sampleBudgetGroups,
+      categories: sampleCategories,
+      monthlySources: [
+        ...sampleMonthlySources,
+        { month: 9, groupName: '생활비', baseSnapshot: 900_000, adjustment: 0 },
+      ],
+      transactions: [],
+    })
+
+    expect(budgets.find((budget) => budget.groupName === '생활비')?.nextMonthExpected)
+      .toBe(2_400_000)
   })
 })

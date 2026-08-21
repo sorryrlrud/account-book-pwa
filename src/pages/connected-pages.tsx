@@ -114,6 +114,7 @@ export function ConnectedBudgetPage() {
   const { selection } = monthControl
   const [groups, setGroups] = useState<BudgetGroupView[]>([])
   const [maximumBudget, setMaximumBudget] = useState(0)
+  const [budgetStartMonth, setBudgetStartMonth] = useState(1)
   const [selectedGroupName, setSelectedGroupName] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const isEditingRef = useRef(false)
@@ -143,6 +144,7 @@ export function ConnectedBudgetPage() {
       const budgetByName = new Map(
         budgets.map((budget) => [budget.groupName, budget]),
       )
+      const nextBudgetStartMonth = settings.yearConfig.budgetStartMonth
       const nextGroups = settings.budgetGroups
         .filter((group) => group.active)
         .flatMap((group): BudgetGroupView[] => {
@@ -164,6 +166,7 @@ export function ConnectedBudgetPage() {
           }]
         })
       setGroups(nextGroups)
+      setBudgetStartMonth(nextBudgetStartMonth)
       setMaximumBudget(
         storedMaximum
           ?? nextGroups.reduce((sum, group) => sum + group.monthly.allocatedBudget, 0),
@@ -171,7 +174,11 @@ export function ConnectedBudgetPage() {
       setSelectedGroupName((current) => {
         return nextGroups.some((group) => group.group.name === current) ? current : ''
       })
-      setStatus(nextGroups.length ? '' : '표시할 예산 그룹이 없습니다.')
+      setStatus(
+        nextGroups.length || selection.month < nextBudgetStartMonth
+          ? ''
+          : '표시할 예산 그룹이 없습니다.',
+      )
     } catch (loadError) {
       setGroups([])
       setError(
@@ -197,6 +204,7 @@ export function ConnectedBudgetPage() {
   }, [load])
 
   const startEditing = () => {
+    if (selection.month < budgetStartMonth) return
     setError('')
     setStatus('')
     setSelectedGroupName('')
@@ -279,11 +287,12 @@ export function ConnectedBudgetPage() {
         year={selection.year}
         month={selection.month}
         groups={groups}
+        budgetStartMonth={budgetStartMonth}
         selectedGroupName={selectedGroupName}
         isEditing={isEditing}
         editorDraft={draft}
         isBusy={isLoading || isMutating}
-        canWrite={service.hasWriteAccess}
+        canWrite={service.hasWriteAccess && selection.month >= budgetStartMonth}
         monthNotice={monthControl.notice}
         saveConfirmation={confirmSave ? {
           open: true,
@@ -478,6 +487,7 @@ export function ConnectedSettingsPage() {
   const [categories, setCategories] = useState<EditableCategory[]>([])
   const [budgetGroups, setBudgetGroups] = useState<string[]>([])
   const [budgetGroupItems, setBudgetGroupItems] = useState<BudgetGroup[]>([])
+  const [budgetStartMonth, setBudgetStartMonth] = useState(1)
   const [yearLinks, setYearLinks] = useState<Array<{
     year: number
     spreadsheetId: string
@@ -519,6 +529,7 @@ export function ConnectedSettingsPage() {
           .map((group) => group.name),
       )
       setBudgetGroupItems(data.budgetGroups)
+      setBudgetStartMonth(data.yearConfig.budgetStartMonth)
       setYearLinks(data.linkedYears.map((linkedYear) => ({
         ...linkedYear,
         spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${linkedYear.spreadsheetId}/edit`,
@@ -664,7 +675,11 @@ export function ConnectedSettingsPage() {
             return
           }
           void runMutation(
-            () => service.createBudgetGroup(year, { name, baseMonthlyBudget }),
+            () => service.createBudgetGroup(year, {
+              name,
+              baseMonthlyBudget,
+              startMonth: Math.max(service.currentMonth, budgetStartMonth),
+            }),
             '예산 그룹을 추가했습니다.',
           ).then((saved) => {
             if (saved) {

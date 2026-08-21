@@ -8,6 +8,7 @@ const GROUP: BudgetGroupView = {
   group: {
     name: '생활비',
     baseMonthlyBudget: 1_000_000,
+    startMonth: 1,
     active: true,
     order: 1,
   },
@@ -59,7 +60,7 @@ describe('BudgetPage', () => {
     const { rerender } = render(<BudgetPage {...props} />)
 
     const totals = screen.getByRole('heading', { name: '이달 예산 계' }).closest('section')!
-    expect(within(totals).getByText('총 예산')).toBeVisible()
+    expect(within(totals).getByText('총 사용 가능액')).toBeVisible()
     expect(within(totals).getByText('1,100,000원')).toBeVisible()
     expect(within(totals).getByText('남은 예산')).toBeVisible()
     expect(within(totals).getByText('660,000원')).toBeVisible()
@@ -177,5 +178,17 @@ describe('BudgetPage', () => {
 
     expect(screen.getByText('불러오는 중입니다.')).toBeVisible()
     expect(screen.queryByText('표시할 예산 그룹이 없습니다.')).not.toBeInTheDocument()
+  })
+
+  it('explains and disables editing before the configured budget start month', () => {
+    render(<BudgetPage {...createProps({
+      month: 7,
+      budgetStartMonth: 8,
+      groups: [],
+    })} />)
+
+    expect(screen.getByRole('heading', { name: '예산 관리 시작 전' })).toBeVisible()
+    expect(screen.getByText(/8월부터 계산하며/)).toBeVisible()
+    expect(screen.getByRole('button', { name: '편집' })).toBeDisabled()
   })
 })

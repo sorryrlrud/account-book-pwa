@@ -36,6 +36,7 @@ function renderEntry(saveTransaction: AppService['saveTransaction']) {
         spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/sheet-2026/edit',
         year: 2026,
         schemaVersion: 1,
+        budgetStartMonth: 1,
       },
       linkedYears: [],
       accounts: [],

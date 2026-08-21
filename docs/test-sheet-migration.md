@@ -45,6 +45,7 @@
 | --- | --- |
 | year | 2026 |
 | schemaVersion | 1 |
+| budgetStartMonth | 8 |
 | environment | TEST |
 | previousSpreadsheetId |  |
 | nextSpreadsheetId |  |
@@ -80,6 +81,9 @@
 11. 단일 거래 삭제
 12. 이체 2행 삭제
 13. 예산 carry-over 계산 확인
+    - `앱설정.budgetStartMonth` 이전 월은 계산에서 제외
+    - `예산그룹.시작월` 이전 월은 그룹별 계산에서 제외
+    - 시작 월의 이월은 0원, 다음 월부터 전월 잔여 자동 이월
 14. 연도 연결 후 `12월 -> 1월` 이동 확인
 15. `0월 데이터 업데이트` 확인
 
