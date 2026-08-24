@@ -43,6 +43,8 @@ export function AppServiceProvider({ children }: { children: ReactNode }) {
     getBudgets: (year, month) => controller.getBudgets(year, month),
     getBudgetMaximum: (year, month) => controller.getBudgetMaximum(year, month),
     saveBudgetPlan: (year, month, input) => controller.saveBudgetPlan(year, month, input),
+    saveBudgetSettlement: (year, month, input) =>
+      controller.saveBudgetSettlement(year, month, input),
     getSettingsData: (year) => controller.getSettingsData(year),
     createBudgetGroup: (year, input) => controller.createBudgetGroup(year, input),
     createAccount: (year, input) => controller.createAccount(year, input),

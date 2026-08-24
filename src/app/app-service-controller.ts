@@ -534,6 +534,16 @@ export class AppServiceController {
     )
   }
 
+  async saveBudgetSettlement(
+    year: number,
+    month: number,
+    input: Parameters<LedgerRepository['saveBudgetSettlement']>[2],
+  ): Promise<void> {
+    await this.#withRepository((repository) =>
+      repository.saveBudgetSettlement(year, month, input),
+    )
+  }
+
   async getSettingsData(year: number): Promise<SettingsData> {
     return this.#withRepository(async (repository) => {
       const graph = await this.#getOrLoadYearGraph(repository)

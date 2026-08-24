@@ -10,7 +10,7 @@
   - legacy 거래유형 inference
   - UI 양수 normalization
 - `src/domain/budget.test.ts`
-  - 예산 이월
+  - 미정산 월 자동 이월 제외와 명시적 정산 이월
   - 연중 예산 시작과 시작 전 거래 제외
   - 신규 그룹의 생성 월 이전 소급 이월 방지
   - 예산 초과
@@ -59,10 +59,10 @@
   - transaction/transfer 삭제
   - 통장/카테고리 load, rename 범위, 사용중지
   - 월별 최대 예산, 카테고리 할당·순서·추가·비활성화 일괄 저장
-  - 설정된 예산 시작 월 이전 편집 차단과 시작 월 이후 자동 이월
+  - 설정된 예산 시작 월 이전 편집·정산 차단과 종료 월 정산 검증
   - 최대 예산 초과 및 중복 월별 행 쓰기 차단
   - 연도 그래프, 인접 연도 연결, 설정된 workbook 대상 검증
-  - `12월 -> 0월` 거래 snapshot과 예산 잔여 동기화
+  - `12월 -> 0월` 거래 snapshot과 저장된 예산 정산액 동기화
   - `0!AB:AC` 시작잔액 기반 정산과 optional 투자/에너지 graceful failure
 - `src/services/sheets/schema.test.ts`
   - 필수 탭, year/schemaVersion/budgetStartMonth, 연결 설정 parsing

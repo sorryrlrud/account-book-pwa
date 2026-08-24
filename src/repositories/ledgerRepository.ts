@@ -3,6 +3,7 @@ import type {
   BudgetGroup,
   BudgetGroupMutation,
   BudgetPlanMutation,
+  BudgetSettlementMutation,
   MonthlyBudget,
   MonthlyBudgetSource,
 } from '@/domain/budget.ts'
@@ -45,6 +46,7 @@ export interface LedgerRepository {
   getMonthlyBudgets(year: number, month: number): Promise<MonthlyBudget[]>
   getMonthlyBudgetMaximum(year: number, month: number): Promise<number | undefined>
   saveBudgetPlan(year: number, month: number, input: BudgetPlanMutation): Promise<void>
+  saveBudgetSettlement(year: number, month: number, input: BudgetSettlementMutation): Promise<void>
   linkYear(request: YearLinkRequest): Promise<LinkedYear[]>
   syncMonthZero(year: number): Promise<void>
   getSettlement(year: number, month: number): Promise<SettlementSummary>

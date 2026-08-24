@@ -20,6 +20,7 @@ export interface MonthlyBudgetSource {
   groupName: string
   baseSnapshot: number
   adjustment: number
+  settledCarryOver?: number
 }
 
 export interface MonthlyBudget {
@@ -33,6 +34,7 @@ export interface MonthlyBudget {
   effectiveBudget: number
   spent: number
   remaining: number
+  settledCarryOver?: number
   nextMonthExpected: number
 }
 
@@ -44,6 +46,15 @@ export interface BudgetPlanGroupMutation {
 export interface BudgetPlanMutation {
   maximumBudget: number
   groups: BudgetPlanGroupMutation[]
+}
+
+export interface BudgetSettlementGroupMutation {
+  name: string
+  carryOver: number
+}
+
+export interface BudgetSettlementMutation {
+  groups: BudgetSettlementGroupMutation[]
 }
 
 export const MONTHLY_BUDGET_LIMIT_GROUP = '__MONTHLY_BUDGET_LIMIT__'
@@ -60,8 +71,6 @@ export interface BudgetComputationInput {
   categories: Category[]
   monthlySources: MonthlyBudgetSource[]
   transactions: Transaction[]
-  monthZeroCarryOvers?: Record<string, number>
-  carryOvers?: Record<string, number>
   budgetStartMonth?: number
 }
 
@@ -76,10 +85,14 @@ export function calculateMonthlyBudgets(
   }
 
   const sourceByGroup = new Map<string, MonthlyBudgetSource>()
+  const previousSourceByGroup = new Map<string, MonthlyBudgetSource>()
   const nextSourceByGroup = new Map<string, MonthlyBudgetSource>()
   for (const source of input.monthlySources) {
     if (source.month === input.month) {
       sourceByGroup.set(source.groupName, source)
+    }
+    if (source.month === input.month - 1) {
+      previousSourceByGroup.set(source.groupName, source)
     }
     if (source.month === input.month + 1) {
       nextSourceByGroup.set(source.groupName, source)
@@ -118,11 +131,9 @@ export function calculateMonthlyBudgets(
     const baseSnapshot = source?.baseSnapshot ?? group.baseMonthlyBudget
     const adjustment = source?.adjustment ?? 0
     const allocatedBudget = baseSnapshot + adjustment
-    const carryOver = input.month === groupStartMonth
-      ? (groupStartMonth === 1
-        ? (input.monthZeroCarryOvers?.[group.name] ?? 0)
-        : 0)
-      : (input.carryOvers?.[group.name] ?? 0)
+    const carryOver = input.month === groupStartMonth && groupStartMonth > 1
+      ? 0
+      : (previousSourceByGroup.get(group.name)?.settledCarryOver ?? 0)
     const spent = spentByGroup.get(group.name) ?? 0
     const effectiveBudget = allocatedBudget + carryOver
     const remaining = effectiveBudget - spent
@@ -142,7 +153,8 @@ export function calculateMonthlyBudgets(
       effectiveBudget,
       spent,
       remaining,
-      nextMonthExpected: nextAllocatedBudget + remaining,
+      settledCarryOver: source?.settledCarryOver,
+      nextMonthExpected: nextAllocatedBudget + (source?.settledCarryOver ?? 0),
     })
   }
 
@@ -155,11 +167,9 @@ export function buildBudgetTimeline(
   categories: Category[],
   monthlySources: MonthlyBudgetSource[],
   transactionsByMonth: Map<number, Transaction[]>,
-  monthZeroCarryOvers?: Record<string, number>,
   budgetStartMonth = 1,
 ): MonthlyBudget[] {
   const timeline: MonthlyBudget[] = []
-  const carryOverByGroup = new Map<string, number>(Object.entries(monthZeroCarryOvers ?? {}))
   const months = new Set<number>()
 
   for (const source of monthlySources) {
@@ -175,32 +185,21 @@ export function buildBudgetTimeline(
   }
 
   const orderedMonths = [...months].sort((left, right) => left - right)
-  let previousMonth: number | undefined
-
   for (const month of orderedMonths) {
-    if (previousMonth !== undefined && month - previousMonth > 1) {
-      carryOverByGroup.clear()
-    }
-
     const monthTransactions = transactionsByMonth.get(month) ?? []
     const monthBudgets = calculateMonthlyBudgets({
       year,
       month,
-        groups,
-        categories,
-        monthlySources,
-        transactions: monthTransactions,
-        monthZeroCarryOvers: Object.fromEntries(carryOverByGroup),
-        carryOvers: Object.fromEntries(carryOverByGroup),
-        budgetStartMonth,
-      })
+      groups,
+      categories,
+      monthlySources,
+      transactions: monthTransactions,
+      budgetStartMonth,
+    })
 
     for (const monthlyBudget of monthBudgets) {
       timeline.push(monthlyBudget)
-      carryOverByGroup.set(monthlyBudget.groupName, monthlyBudget.remaining)
     }
-
-    previousMonth = month
   }
 
   return timeline

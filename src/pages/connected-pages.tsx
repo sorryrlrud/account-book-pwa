@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppService } from '@/app/use-app-service.ts'
 import type { BudgetGroup, MonthlyBudget } from '@/domain/budget.ts'
 import type { SettlementSummary } from '@/domain/settlement.ts'
-import type { BudgetEditorDraft, BudgetGroupView } from '@/features/budgets/types.ts'
+import type {
+  BudgetEditorDraft,
+  BudgetGroupView,
+  BudgetSettlementDraft,
+} from '@/features/budgets/types.ts'
 import type {
   EditableAccount,
   EditableCategory,
@@ -13,6 +17,7 @@ import EnergyPage from '@/pages/EnergyPage.tsx'
 import InvestmentPage from '@/pages/InvestmentPage.tsx'
 import SettingsPage from '@/pages/SettingsPage.tsx'
 import SettlementPage from '@/pages/SettlementPage.tsx'
+import { toKstDateParts } from '@/utils/date.ts'
 
 interface YearMonth {
   year: number
@@ -117,15 +122,19 @@ export function ConnectedBudgetPage() {
   const [budgetStartMonth, setBudgetStartMonth] = useState(1)
   const [selectedGroupName, setSelectedGroupName] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  const [isSettling, setIsSettling] = useState(false)
   const isEditingRef = useRef(false)
+  const editAfterSettlementRef = useRef('')
   const [draft, setDraft] = useState<BudgetEditorDraft>({
     maximumBudget: '0',
     groups: [],
   })
+  const [settlementDraft, setSettlementDraft] = useState<BudgetSettlementDraft>({ groups: [] })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [confirmSave, setConfirmSave] = useState(false)
+  const [settlementWarning, setSettlementWarning] = useState(false)
   const [isMutating, setIsMutating] = useState(false)
   const getSettingsData = service.getSettingsData
   const getBudgets = service.getBudgets
@@ -157,7 +166,7 @@ export function ConnectedBudgetPage() {
             monthly,
             details: [
               { label: '할당 예산', amount: monthly.allocatedBudget },
-              { label: '이월 예산', amount: monthly.carryOver, signed: true },
+              { label: '전월 정산 반영', amount: monthly.carryOver, signed: true },
               { label: '사용액', amount: monthly.spent },
             ],
             note: monthly.remaining < 0
@@ -167,18 +176,31 @@ export function ConnectedBudgetPage() {
         })
       setGroups(nextGroups)
       setBudgetStartMonth(nextBudgetStartMonth)
-      setMaximumBudget(
-        storedMaximum
-          ?? nextGroups.reduce((sum, group) => sum + group.monthly.allocatedBudget, 0),
-      )
+      const nextMaximum = storedMaximum
+        ?? nextGroups.reduce((sum, group) => sum + group.monthly.allocatedBudget, 0)
+      setMaximumBudget(nextMaximum)
       setSelectedGroupName((current) => {
         return nextGroups.some((group) => group.group.name === current) ? current : ''
       })
-      setStatus(
-        nextGroups.length || selection.month < nextBudgetStartMonth
-          ? ''
-          : '표시할 예산 그룹이 없습니다.',
-      )
+      if (editAfterSettlementRef.current) {
+        setDraft({
+          maximumBudget: nextMaximum.toLocaleString('ko-KR'),
+          groups: nextGroups.map((group) => ({
+            name: group.group.name,
+            allocatedBudget: group.monthly.allocatedBudget,
+          })),
+        })
+        isEditingRef.current = true
+        setIsEditing(true)
+        setStatus(`${editAfterSettlementRef.current} 정산을 반영했습니다. 이번 달 예산을 편성해주세요.`)
+        editAfterSettlementRef.current = ''
+      } else {
+        setStatus(
+          nextGroups.length || selection.month < nextBudgetStartMonth
+            ? ''
+            : '표시할 예산 그룹이 없습니다.',
+        )
+      }
     } catch (loadError) {
       setGroups([])
       setError(
@@ -208,6 +230,7 @@ export function ConnectedBudgetPage() {
     setError('')
     setStatus('')
     setSelectedGroupName('')
+    setIsSettling(false)
     setDraft({
       maximumBudget: maximumBudget.toLocaleString('ko-KR'),
       groups: groups.map((group) => ({
@@ -219,11 +242,45 @@ export function ConnectedBudgetPage() {
     setIsEditing(true)
   }
 
+  const startSettlement = () => {
+    if (selection.month < budgetStartMonth) return
+    const current = toKstDateParts()
+    if (
+      selection.year > current.year ||
+      (selection.year === current.year && selection.month >= current.month)
+    ) {
+      setSettlementWarning(true)
+      return
+    }
+    setError('')
+    setStatus('')
+    setSelectedGroupName('')
+    setSettlementDraft({
+      groups: groups.map((group) => {
+        const carryOver = group.monthly.settledCarryOver ?? group.monthly.remaining
+        return {
+          name: group.group.name,
+          currentRemaining: group.monthly.remaining,
+          carryOver: carryOver.toLocaleString('ko-KR'),
+        }
+      }),
+    })
+    isEditingRef.current = true
+    setIsSettling(true)
+  }
+
   const cancelEditing = () => {
     setConfirmSave(false)
     setError('')
     isEditingRef.current = false
     setIsEditing(false)
+  }
+
+  const cancelSettlement = () => {
+    setSettlementWarning(false)
+    setError('')
+    isEditingRef.current = false
+    setIsSettling(false)
   }
 
   const removedGroupNames = groups
@@ -280,6 +337,53 @@ export function ConnectedBudgetPage() {
     void applyBudgetPlan()
   }
 
+  const applySettlement = async () => {
+    const parsedGroups = settlementDraft.groups.map((group) => ({
+      name: group.name,
+      carryOver: Number(group.carryOver.replaceAll(',', '')),
+    }))
+    if (parsedGroups.some((group) => !Number.isFinite(group.carryOver))) {
+      setError('카테고리별 정산 금액을 확인해주세요.')
+      return
+    }
+    const totalRemaining = settlementDraft.groups.reduce(
+      (sum, group) => sum + group.currentRemaining,
+      0,
+    )
+    const plannedCarryOver = parsedGroups.reduce((sum, group) => sum + group.carryOver, 0)
+    if (totalRemaining >= 0 && plannedCarryOver !== totalRemaining) {
+      setError('남은 전체 금액을 카테고리에 모두 배분해주세요.')
+      return
+    }
+    if (totalRemaining < 0 && (plannedCarryOver < totalRemaining || plannedCarryOver > 0)) {
+      setError('이월할 부족액은 실제 부족액과 0원 사이로 설정해주세요.')
+      return
+    }
+
+    setError('')
+    setIsMutating(true)
+    try {
+      await service.saveBudgetSettlement(selection.year, selection.month, { groups: parsedGroups })
+      isEditingRef.current = false
+      setIsSettling(false)
+      if (monthControl.canGoNext) {
+        editAfterSettlementRef.current = `${selection.year}년 ${selection.month}월`
+        monthControl.shift(1)
+      } else {
+        await load()
+        setStatus('정산을 저장했습니다. 다음 연도 Sheet를 연결하면 다음 달 예산을 편집할 수 있습니다.')
+      }
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : '정산 내용을 저장하지 못했습니다.',
+      )
+    } finally {
+      setIsMutating(false)
+    }
+  }
+
   return (
     <>
       <PageNotice busy={isLoading || isMutating} error={error} status={status} />
@@ -290,7 +394,9 @@ export function ConnectedBudgetPage() {
         budgetStartMonth={budgetStartMonth}
         selectedGroupName={selectedGroupName}
         isEditing={isEditing}
+        isSettling={isSettling}
         editorDraft={draft}
+        settlementDraft={settlementDraft}
         isBusy={isLoading || isMutating}
         canWrite={service.hasWriteAccess && selection.month >= budgetStartMonth}
         monthNotice={monthControl.notice}
@@ -304,6 +410,15 @@ export function ConnectedBudgetPage() {
           onConfirm: () => { void applyBudgetPlan() },
           onCancel: () => setConfirmSave(false),
         } : undefined}
+        settlementWarning={settlementWarning ? {
+          open: true,
+          title: '아직 정산할 수 없어요',
+          description: `${selection.year}년 ${selection.month}월이 끝난 뒤 정산할 수 있습니다. 현재 월의 거래를 모두 마친 후 다시 진행해주세요.`,
+          confirmLabel: '확인',
+          confirmOnly: true,
+          onConfirm: () => setSettlementWarning(false),
+          onCancel: () => setSettlementWarning(false),
+        } : undefined}
         canGoPrevious={monthControl.canGoPrevious && !isLoading && !isMutating}
         canGoNext={monthControl.canGoNext && !isLoading && !isMutating}
         onPreviousMonth={() => monthControl.shift(-1)}
@@ -312,9 +427,13 @@ export function ConnectedBudgetPage() {
           setSelectedGroupName(selectedGroupName === groupName ? '' : groupName)
         }}
         onStartEditing={startEditing}
+        onStartSettlement={startSettlement}
         onCancelEditing={cancelEditing}
+        onCancelSettlement={cancelSettlement}
         onEditorDraftChange={setDraft}
+        onSettlementDraftChange={setSettlementDraft}
         onRequestSave={requestSave}
+        onRequestSettlement={() => { void applySettlement() }}
       />
     </>
   )

@@ -15,6 +15,7 @@ interface HarnessOptions {
   workbooks?: WorkbookSeed[]
   stripTransactionIdsOnAppend?: boolean
   stripTransferIdsOnAppend?: boolean
+  now?: () => Date
 }
 
 function createHarness(options: HarnessOptions = {}) {
@@ -40,6 +41,7 @@ function createHarness(options: HarnessOptions = {}) {
     },
     tokenStore,
     sheetsClient: fakeSheetsClient as never,
+    now: options.now,
   })
 
   return {
@@ -847,7 +849,7 @@ describe('GoogleSheetsLedgerRepository', () => {
     expect(fakeSheetsClient.batchGetValuesCalls[0]?.ranges).toEqual([
       buildRange('예산그룹', 'A:E'),
       buildRange('카테고리', 'A:D'),
-      buildRange('예산월별', 'A:D'),
+      buildRange('예산월별', 'A:E'),
       ...Array.from({ length: 8 }, (_, index) => buildRange(String(index + 1), 'A:Z')),
     ])
   })
@@ -869,9 +871,9 @@ describe('GoogleSheetsLedgerRepository', () => {
       ['Travel', '100000', 'TRUE', '2', '8'],
     ]))
     expect(fakeSheetsClient.getSheetValues('sheet-2026', '예산월별')).toEqual(expect.arrayContaining([
-      ['8', 'Living', '800000', '0'],
-      ['8', 'Travel', '100000', '0'],
-      ['8', '__MONTHLY_BUDGET_LIMIT__', '1000000', '0'],
+      ['8', 'Living', '800000', '0', ''],
+      ['8', 'Travel', '100000', '0', ''],
+      ['8', '__MONTHLY_BUDGET_LIMIT__', '1000000', '0', ''],
     ]))
     await expect(repository.getMonthlyBudgetMaximum(2026, 8)).resolves.toBe(1_000_000)
     expect(
@@ -894,6 +896,63 @@ describe('GoogleSheetsLedgerRepository', () => {
       fakeSheetsClient.getSheetValues('sheet-2026', '예산월별')
         .filter((row) => row[0] === '8' && row[1] === '__MONTHLY_BUDGET_LIMIT__'),
     ).toHaveLength(1)
+  })
+
+  it('stores a closed-month settlement and applies it to the next month only', async () => {
+    const { repository, fakeSheetsClient } = createHarness({
+      now: () => new Date('2027-01-01T00:00:00.000Z'),
+    })
+
+    await repository.saveBudgetSettlement(2026, 8, {
+      groups: [{ name: 'Living', carryOver: 964_000 }],
+    })
+
+    expect(
+      fakeSheetsClient.getSheetValues('sheet-2026', '예산월별')
+        .find((row) => row[0] === '8' && row[1] === 'Living'),
+    ).toEqual(['8', 'Living', '1000000', '0', '964000'])
+    await expect(repository.getMonthlyBudgets(2026, 9)).resolves.toEqual([
+      expect.objectContaining({
+        groupName: 'Living',
+        carryOver: 964_000,
+        effectiveBudget: 1_964_000,
+      }),
+    ])
+  })
+
+  it('rejects settlement before the selected month has ended', async () => {
+    const { repository, fakeSheetsClient } = createHarness({
+      now: () => new Date('2026-08-24T03:00:00.000Z'),
+    })
+
+    await expect(repository.saveBudgetSettlement(2026, 8, {
+      groups: [{ name: 'Living', carryOver: 964_000 }],
+    })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      userMessage: '현재 월이 끝난 뒤에 정산할 수 있습니다.',
+    })
+    expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(0)
+  })
+
+  it('propagates a december settlement to the linked january budget snapshot', async () => {
+    const { repository, fakeSheetsClient } = createHarness({
+      now: () => new Date('2026-08-24T03:00:00.000Z'),
+    })
+
+    await repository.saveBudgetSettlement(2025, 12, {
+      groups: [{ name: 'Living', carryOver: 1_000_000 }],
+    })
+
+    expect(
+      fakeSheetsClient.getSheetValues('sheet-2026', '예산월별')
+        .find((row) => row[0] === '0' && row[1] === 'Living'),
+    ).toEqual(['0', 'Living', '0', '0', '1000000'])
+    await expect(repository.getMonthlyBudgets(2026, 1)).resolves.toEqual([
+      expect.objectContaining({
+        groupName: 'Living',
+        carryOver: 1_000_000,
+      }),
+    ])
   })
 
   it('deactivates removed categories without deleting their rows', async () => {
@@ -932,7 +991,7 @@ describe('GoogleSheetsLedgerRepository', () => {
     ])
   })
 
-  it('ignores pre-start transactions and rolls the first budget month into the next month', async () => {
+  it('ignores pre-start transactions and carries only a saved settlement into the next month', async () => {
     const workbooks = createDefaultWorkbooks()
     const currentWorkbook = workbooks.find((workbook) => workbook.spreadsheetId === 'sheet-2026')
     if (!currentWorkbook) throw new Error('Missing current workbook fixture')
@@ -955,7 +1014,10 @@ describe('GoogleSheetsLedgerRepository', () => {
         }),
       ],
     }
-    const { repository } = createHarness({ workbooks })
+    const { repository } = createHarness({
+      workbooks,
+      now: () => new Date('2027-01-01T00:00:00.000Z'),
+    })
 
     await expect(repository.getMonthlyBudgets(2026, 7)).resolves.toEqual([])
     await expect(repository.getMonthlyBudgets(2026, 8)).resolves.toEqual([
@@ -967,6 +1029,9 @@ describe('GoogleSheetsLedgerRepository', () => {
         remaining: 200_000,
       }),
     ])
+    await repository.saveBudgetSettlement(2026, 8, {
+      groups: [{ name: 'Living', carryOver: 200_000 }],
+    })
     await expect(repository.getMonthlyBudgets(2026, 9)).resolves.toEqual([
       expect.objectContaining({
         groupName: 'Living',
@@ -1186,8 +1251,18 @@ describe('GoogleSheetsLedgerRepository', () => {
     ).toBe('sheet-2025')
   })
 
-  it('copies previous december and its budget remainder into current month zero without reverse writes', async () => {
-    const { repository, fakeSheetsClient } = createHarness()
+  it('copies only a saved december settlement into current month zero without reverse writes', async () => {
+    const workbooks = createDefaultWorkbooks()
+    const previousWorkbook = workbooks.find((workbook) => workbook.spreadsheetId === 'sheet-2025')
+    if (!previousWorkbook) throw new Error('Missing previous workbook fixture')
+    previousWorkbook.sheetValues = {
+      ...previousWorkbook.sheetValues,
+      예산월별: [
+        ['month', 'groupName', 'baseSnapshot', 'adjustment', 'settledCarryOver'],
+        ['12', 'Living', '1000000', '0', '250000'],
+      ],
+    }
+    const { repository, fakeSheetsClient } = createHarness({ workbooks })
 
     await repository.syncMonthZero(2026)
 
@@ -1207,15 +1282,22 @@ describe('GoogleSheetsLedgerRepository', () => {
     expect(monthZeroRows[2]?.slice(27, 29)).toEqual(['Savings', '990000'])
     const monthZeroBudget = fakeSheetsClient.getSheetValues('sheet-2026', '예산월별')
       .find((row) => row[0] === '0' && row[1] === 'Living')
-    expect(monthZeroBudget).toEqual(['0', 'Living', '12995500', '0'])
+    expect(monthZeroBudget).toEqual(['0', 'Living', '0', '0', '250000'])
     expect(fakeSheetsClient.batchUpdateValuesCalls).toHaveLength(1)
     expect(fakeSheetsClient.batchUpdateValuesCalls[0]).toMatchObject({
       spreadsheetId: 'sheet-2026',
     })
-    expect(fakeSheetsClient.batchUpdateValuesCalls[0]?.data[0]?.range).toBe(
+    expect(fakeSheetsClient.batchUpdateValuesCalls[0]?.data[1]?.range).toBe(
       buildRange('0', 'A1:Z2'),
     )
     expect(fakeSheetsClient.updateCalls).toHaveLength(0)
+
+    await expect(repository.getMonthlyBudgets(2026, 1)).resolves.toEqual([
+      expect.objectContaining({
+        groupName: 'Living',
+        carryOver: 250_000,
+      }),
+    ])
 
     const januarySettlement = await repository.getSettlement(2026, 1)
     expect(januarySettlement.accounts).toMatchObject([

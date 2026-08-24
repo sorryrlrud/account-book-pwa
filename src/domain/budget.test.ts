@@ -13,7 +13,7 @@ import {
 } from '../../tests/fixtures/sampleLedger.ts'
 
 describe('budget domain helpers', () => {
-  it('carries over the previous month remainder into the next month timeline', () => {
+  it('does not carry over an unsettled previous month remainder', () => {
     const transactionsByMonth = new Map<number, ReturnType<typeof createExpenseTransaction>[]>([
       [7, [createExpenseTransaction({ sourceMonth: 7, amount: -1_000_000 })]],
       [8, []],
@@ -32,14 +32,14 @@ describe('budget domain helpers', () => {
     )
 
     expect(augustLiving).toMatchObject({
-      carryOver: 500_000,
-      effectiveBudget: 2_000_000,
-      remaining: 2_000_000,
-      nextMonthExpected: 3_500_000,
+      carryOver: 0,
+      effectiveBudget: 1_500_000,
+      remaining: 1_500_000,
+      nextMonthExpected: 1_500_000,
     })
   })
 
-  it('keeps negative overage in the next month carry-over', () => {
+  it('applies a manually settled negative carry-over to the next month', () => {
     const transactionsByMonth = new Map<number, ReturnType<typeof createExpenseTransaction>[]>([
       [7, [createExpenseTransaction({ sourceMonth: 7, amount: -1_000_000 })]],
       [8, [createExpenseTransaction({ sourceMonth: 8, amount: -2_300_000 })]],
@@ -50,7 +50,16 @@ describe('budget domain helpers', () => {
       2026,
       sampleBudgetGroups,
       sampleCategories,
-      sampleMonthlySources,
+      [
+        ...sampleMonthlySources,
+        {
+          month: 8,
+          groupName: '생활비',
+          baseSnapshot: 1_500_000,
+          adjustment: 0,
+          settledCarryOver: -300_000,
+        },
+      ],
       transactionsByMonth,
     )
 
@@ -62,9 +71,10 @@ describe('budget domain helpers', () => {
     )
 
     expect(augustLiving).toMatchObject({
-      effectiveBudget: 2_000_000,
+      effectiveBudget: 1_500_000,
       spent: 2_300_000,
-      remaining: -300_000,
+      remaining: -800_000,
+      settledCarryOver: -300_000,
     })
     expect(septemberLiving).toMatchObject({
       carryOver: -300_000,
@@ -104,7 +114,7 @@ describe('budget domain helpers', () => {
       allocatedBudget: 2_000_000,
       effectiveBudget: 2_000_000,
       remaining: 2_000_000,
-      nextMonthExpected: 7_000_000,
+      nextMonthExpected: 5_000_000,
     })
   })
 
@@ -114,11 +124,17 @@ describe('budget domain helpers', () => {
       month: 1,
       groups: sampleBudgetGroups,
       categories: sampleCategories,
-      monthlySources: sampleMonthlySources,
+      monthlySources: [
+        ...sampleMonthlySources,
+        {
+          month: 0,
+          groupName: '생활비',
+          baseSnapshot: 0,
+          adjustment: 0,
+          settledCarryOver: -30_000,
+        },
+      ],
       transactions: [],
-      monthZeroCarryOvers: {
-        생활비: -30_000,
-      },
     })
 
     const januaryLiving = budgets.find((budget) => budget.groupName === '생활비')
@@ -165,7 +181,7 @@ describe('budget domain helpers', () => {
     expect(budgets).toEqual([])
   })
 
-  it('starts a midyear budget with zero carry-over and rolls forward from there', () => {
+  it('starts a midyear budget with zero carry-over and uses only a saved settlement', () => {
     const transactionsByMonth = new Map<number, ReturnType<typeof createExpenseTransaction>[]>(
       Array.from({ length: 9 }, (_, index) => [index + 1, []]),
     )
@@ -177,9 +193,17 @@ describe('budget domain helpers', () => {
       2026,
       sampleBudgetGroups,
       sampleCategories,
-      sampleMonthlySources,
+      [
+        ...sampleMonthlySources,
+        {
+          month: 8,
+          groupName: '생활비',
+          baseSnapshot: 1_500_000,
+          adjustment: 0,
+          settledCarryOver: 700_000,
+        },
+      ],
       transactionsByMonth,
-      { 생활비: 900_000 },
       8,
     )
 
@@ -208,7 +232,6 @@ describe('budget domain helpers', () => {
       [],
       [{ month: 8, groupName: '여행', baseSnapshot: 500_000, adjustment: 0 }],
       transactionsByMonth,
-      undefined,
       1,
     )
 
@@ -224,6 +247,13 @@ describe('budget domain helpers', () => {
       categories: sampleCategories,
       monthlySources: [
         ...sampleMonthlySources,
+        {
+          month: 8,
+          groupName: '생활비',
+          baseSnapshot: 1_500_000,
+          adjustment: 0,
+          settledCarryOver: 1_500_000,
+        },
         { month: 9, groupName: '생활비', baseSnapshot: 900_000, adjustment: 0 },
       ],
       transactions: [],

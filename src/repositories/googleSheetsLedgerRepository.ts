@@ -5,6 +5,7 @@ import {
   type BudgetGroup,
   type BudgetGroupMutation,
   type BudgetPlanMutation,
+  type BudgetSettlementMutation,
   type MonthlyBudget,
   type MonthlyBudgetSource,
 } from '@/domain/budget.ts'
@@ -41,7 +42,7 @@ import {
   parseTransactions,
 } from '@/services/sheets/transactionAdapter.ts'
 import type { AppEnv } from '@/services/env.ts'
-import { assertMonth, getYearMonthFromDate } from '@/utils/date.ts'
+import { assertMonth, getYearMonthFromDate, toKstDateParts } from '@/utils/date.ts'
 import {
   normalizeBooleanCell,
   parseSheetNumber,
@@ -55,6 +56,7 @@ interface GoogleSheetsLedgerRepositoryOptions {
   env: AppEnv
   tokenStore: InMemoryTokenStore
   sheetsClient?: SheetsClient
+  now?: () => Date
 }
 
 interface ResolvedYearTarget {
@@ -74,6 +76,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
   readonly #env: AppEnv
   readonly #tokenStore: InMemoryTokenStore
   readonly #sheetsClient: SheetsClient
+  readonly #now: () => Date
   readonly #connectedYearConfigCache = new Map<number, YearConfig>()
 
   constructor(options: GoogleSheetsLedgerRepositoryOptions) {
@@ -84,6 +87,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       new SheetsClient({
         getAccessToken: () => this.#tokenStore.requireValidToken().accessToken,
       })
+    this.#now = options.now ?? (() => new Date())
   }
 
   async bootstrap(): Promise<BootstrapResult> {
@@ -514,7 +518,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
   async getMonthlyBudgetSources(year: number): Promise<MonthlyBudgetSource[]> {
     const config = await this.#resolveYearConfig(year)
-    const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D'))
+    const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:E'))
     return parseMonthlyBudgetSources(range)
   }
 
@@ -523,7 +527,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     const ranges = [
       buildRange('예산그룹', 'A:E'),
       buildRange('카테고리', 'A:D'),
-      buildRange('예산월별', 'A:D'),
+      buildRange('예산월별', 'A:E'),
       ...Array.from({ length: month }, (_, index) =>
         buildRange(String(index + 1), MONTH_SHEET_COLUMNS)),
     ]
@@ -540,14 +544,12 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       transactionsByMonth.set(currentMonth, transactions)
     }
 
-    const monthZeroCarryOvers = this.#getMonthZeroCarryOvers(groups, monthlySources)
     const timeline = buildBudgetTimeline(
       year,
       groups,
       categories,
       monthlySources,
       transactionsByMonth,
-      monthZeroCarryOvers,
       config.budgetStartMonth,
     )
 
@@ -557,7 +559,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
   async getMonthlyBudgetMaximum(year: number, month: number): Promise<number | undefined> {
     assertMonth(month)
     const config = await this.#resolveYearConfig(year)
-    const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D'))
+    const range = await this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:E'))
     const rowNumber = this.#findBudgetSourceRow(range, month, MONTHLY_BUDGET_LIMIT_GROUP)
     return rowNumber === undefined
       ? undefined
@@ -603,7 +605,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     }
     const [groupRange, monthlyRange] = await Promise.all([
       this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산그룹', 'A:E')),
-      this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:D')),
+      this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:E')),
     ])
     const groupRows = groupRange.values ?? []
     const existingGroupRows = new Map<string, { rowNumber: number; row: string[] }>()
@@ -666,12 +668,13 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       const existingRowNumber = this.#findBudgetSourceRow(monthlyRange, month, group.name)
       const rowNumber = existingRowNumber ?? nextMonthlyRow++
       updates.push({
-        range: buildRowRange('예산월별', rowNumber, 'A:D'),
+        range: buildRowRange('예산월별', rowNumber, 'A:E'),
         values: [[
           String(month),
           toUserEnteredLiteral(group.name),
           String(group.allocatedBudget),
           '0',
+          '',
         ]],
       })
     }
@@ -679,16 +682,155 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     const limitRowNumber = this.#findBudgetSourceRow(monthlyRange, month, MONTHLY_BUDGET_LIMIT_GROUP)
       ?? nextMonthlyRow
     updates.push({
-      range: buildRowRange('예산월별', limitRowNumber, 'A:D'),
+      range: buildRowRange('예산월별', limitRowNumber, 'A:E'),
       values: [[
         String(month),
         MONTHLY_BUDGET_LIMIT_GROUP,
         String(input.maximumBudget),
         '0',
+        '',
       ]],
     })
 
     await this.#sheetsClient.batchUpdateValues(config.spreadsheetId, updates)
+  }
+
+  async saveBudgetSettlement(
+    year: number,
+    month: number,
+    input: BudgetSettlementMutation,
+  ): Promise<void> {
+    assertMonth(month)
+    if (month === 0) {
+      throw new AppError('VALIDATION_ERROR', '정산 월을 확인해주세요.')
+    }
+    const current = toKstDateParts(this.#now())
+    if (year > current.year || (year === current.year && month >= current.month)) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        '현재 월이 끝난 뒤에 정산할 수 있습니다.',
+      )
+    }
+
+    const normalizedGroups = input.groups.map((group) => ({
+      name: group.name.trim(),
+      carryOver: group.carryOver,
+    }))
+    if (normalizedGroups.some((group) =>
+      !group.name ||
+      group.name === MONTHLY_BUDGET_LIMIT_GROUP ||
+      !Number.isFinite(group.carryOver)
+    )) {
+      throw new AppError('VALIDATION_ERROR', '카테고리별 정산 금액을 확인해주세요.')
+    }
+    const requestedNames = new Set(normalizedGroups.map((group) => group.name))
+    if (requestedNames.size !== normalizedGroups.length) {
+      throw new AppError('VALIDATION_ERROR', '같은 이름의 카테고리가 중복되어 있습니다.')
+    }
+
+    const config = await this.#resolveYearConfig(year)
+    if (month < config.budgetStartMonth) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `${config.year}년 예산은 ${config.budgetStartMonth}월부터 정산할 수 있습니다.`,
+      )
+    }
+    const [budgets, monthlyRange] = await Promise.all([
+      this.getMonthlyBudgets(year, month),
+      this.#sheetsClient.getValues(config.spreadsheetId, buildRange('예산월별', 'A:E')),
+    ])
+    const budgetNames = new Set(budgets.map((budget) => budget.groupName))
+    if (
+      budgetNames.size !== requestedNames.size ||
+      [...budgetNames].some((name) => !requestedNames.has(name))
+    ) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        '예산 목록이 변경되었습니다. 다시 불러온 뒤 정산해주세요.',
+      )
+    }
+
+    const totalRemaining = budgets.reduce((sum, budget) => sum + budget.remaining, 0)
+    const plannedCarryOver = normalizedGroups.reduce((sum, group) => sum + group.carryOver, 0)
+    if (totalRemaining >= 0 && plannedCarryOver !== totalRemaining) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        '남은 전체 금액을 카테고리에 모두 배분해주세요.',
+      )
+    }
+    if (totalRemaining < 0 && (plannedCarryOver < totalRemaining || plannedCarryOver > 0)) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        '이월할 부족액은 실제 부족액과 0원 사이로 설정해주세요.',
+      )
+    }
+
+    const rows = monthlyRange.values ?? []
+    let nextRow = rows.length + 1
+    const budgetByName = new Map(budgets.map((budget) => [budget.groupName, budget]))
+    const updates: Array<{ range: string; values: string[][] }> = [{
+      range: buildRange('예산월별', 'E1'),
+      values: [['정산이월']],
+    }]
+    for (const group of normalizedGroups) {
+      const existingRowNumber = this.#findBudgetSourceRow(monthlyRange, month, group.name)
+      const rowNumber = existingRowNumber ?? nextRow++
+      const existingRow = existingRowNumber ? rows[existingRowNumber - 1] ?? [] : []
+      const budget = budgetByName.get(group.name)
+      updates.push({
+        range: buildRowRange('예산월별', rowNumber, 'A:E'),
+        values: [[
+          String(month),
+          toUserEnteredLiteral(group.name),
+          existingRow[2] ?? String(budget?.baseSnapshot ?? 0),
+          existingRow[3] ?? '0',
+          String(group.carryOver),
+        ]],
+      })
+    }
+
+    let nextYearSettlement:
+      | { spreadsheetId: string; updates: Array<{ range: string; values: string[][] }> }
+      | undefined
+    if (month === 12 && config.nextSpreadsheetId) {
+      const nextYearConfig = await this.#resolveYearConfig(year + 1)
+      const nextYearRange = await this.#sheetsClient.getValues(
+        nextYearConfig.spreadsheetId,
+        buildRange('예산월별', 'A:E'),
+      )
+      const nextYearRows = nextYearRange.values ?? []
+      let nextYearRow = nextYearRows.length + 1
+      const nextYearUpdates: Array<{ range: string; values: string[][] }> = [{
+        range: buildRange('예산월별', 'E1'),
+        values: [['정산이월']],
+      }]
+      for (const group of normalizedGroups) {
+        const existingRowNumber = this.#findBudgetSourceRow(nextYearRange, 0, group.name)
+        const rowNumber = existingRowNumber ?? nextYearRow++
+        nextYearUpdates.push({
+          range: buildRowRange('예산월별', rowNumber, 'A:E'),
+          values: [[
+            '0',
+            toUserEnteredLiteral(group.name),
+            '0',
+            '0',
+            String(group.carryOver),
+          ]],
+        })
+      }
+      nextYearSettlement = {
+        spreadsheetId: nextYearConfig.spreadsheetId,
+        updates: nextYearUpdates,
+      }
+    }
+
+    await this.#sheetsClient.batchUpdateValues(config.spreadsheetId, updates)
+    if (nextYearSettlement) {
+      await this.#sheetsClient.batchUpdateValues(
+        nextYearSettlement.spreadsheetId,
+        nextYearSettlement.updates,
+      )
+    }
   }
 
   async linkYear(request: YearLinkRequest): Promise<LinkedYear[]> {
@@ -771,7 +913,7 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     ] = await Promise.all([
       this.#sheetsClient.getValues(previousYear.spreadsheetId, buildRange('12', 'A:Z')),
       this.#sheetsClient.getValues(currentYear.spreadsheetId, buildRange('0', 'A:Z')),
-      this.#sheetsClient.getValues(currentYear.spreadsheetId, buildRange('예산월별', 'A:D')),
+      this.#sheetsClient.getValues(currentYear.spreadsheetId, buildRange('예산월별', 'A:E')),
       this.#sheetsClient.getValues(currentYear.spreadsheetId, buildRange('0', 'AB:AC')),
       this.getMonthlyBudgets(year - 1, 12),
       this.getSettlement(year - 1, 12),
@@ -798,12 +940,13 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       )
       const rowNumber = existingIndex >= 0 ? existingIndex + 1 : nextBudgetRow++
       return {
-        range: buildRowRange('예산월별', rowNumber, 'A:D'),
+        range: buildRowRange('예산월별', rowNumber, 'A:E'),
         values: [[
           '0',
           toUserEnteredLiteral(budget.groupName),
-          String(budget.remaining),
           '0',
+          '0',
+          String(budget.settledCarryOver ?? 0),
         ]],
       }
     })
@@ -825,6 +968,10 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     }
 
     await this.#sheetsClient.batchUpdateValues(currentYear.spreadsheetId, [
+      {
+        range: buildRange('예산월별', 'E1'),
+        values: [['정산이월']],
+      },
       {
         range: buildRange('0', `A1:Z${rowCount}`),
         values: snapshotRows,
@@ -1238,21 +1385,6 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
       )
     }
     return rowNumbers[0]
-  }
-
-  #getMonthZeroCarryOvers(
-    groups: BudgetGroup[],
-    monthlySources: MonthlyBudgetSource[],
-  ): Record<string, number> {
-    const sourceByGroup = new Map(
-      monthlySources
-        .filter((source) => source.month === 0)
-        .map((source) => [source.groupName, source.baseSnapshot]),
-    )
-
-    return Object.fromEntries(
-      groups.map((group) => [group.name, sourceByGroup.get(group.name) ?? 0]),
-    )
   }
 
   #parseAccountBalanceSnapshot(range: SheetsValueRange): Map<string, number> {

@@ -47,11 +47,17 @@ export function parseBudgetGroups(range: SheetsValueRange): BudgetGroup[] {
 export function parseMonthlyBudgetSources(range: SheetsValueRange): MonthlyBudgetSource[] {
   return (range.values ?? [])
     .slice(1)
-    .map((row) => ({
-      month: parseSheetNumber(row[0]),
-      groupName: trimCell(row[1]),
-      baseSnapshot: parseSheetNumber(row[2]),
-      adjustment: parseSheetNumber(row[3]),
-    }))
+    .map((row) => {
+      const settledCarryOver = trimCell(row[4])
+      return {
+        month: parseSheetNumber(row[0]),
+        groupName: trimCell(row[1]),
+        baseSnapshot: parseSheetNumber(row[2]),
+        adjustment: parseSheetNumber(row[3]),
+        settledCarryOver: settledCarryOver
+          ? parseSheetNumber(settledCarryOver)
+          : undefined,
+      }
+    })
     .filter((source) => source.month >= 0 && source.month <= 12 && source.groupName)
 }

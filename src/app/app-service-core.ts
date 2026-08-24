@@ -4,6 +4,7 @@ import type {
   BudgetGroup,
   BudgetGroupMutation,
   BudgetPlanMutation,
+  BudgetSettlementMutation,
   MonthlyBudget,
 } from '@/domain/budget.ts'
 import type { Category, CategoryMutation } from '@/domain/category.ts'
@@ -94,6 +95,7 @@ export interface AppService extends AppServiceState {
   getBudgets(year: number, month: number): Promise<MonthlyBudget[]>
   getBudgetMaximum(year: number, month: number): Promise<number | undefined>
   saveBudgetPlan(year: number, month: number, input: BudgetPlanMutation): Promise<void>
+  saveBudgetSettlement(year: number, month: number, input: BudgetSettlementMutation): Promise<void>
   getSettingsData(year: number): Promise<SettingsData>
   createBudgetGroup(year: number, input: BudgetGroupMutation): Promise<BudgetGroup>
   createAccount(year: number, input: AccountMutation): Promise<Account>
@@ -188,6 +190,10 @@ class UnconfiguredAppService implements AppService {
   }
 
   async saveBudgetPlan(): Promise<void> {
+    throw new Error(UNCONFIGURED_MESSAGE)
+  }
+
+  async saveBudgetSettlement(): Promise<void> {
     throw new Error(UNCONFIGURED_MESSAGE)
   }
 

@@ -64,8 +64,8 @@ export function BudgetGroupCard({ item, expanded = false, onSelect }: BudgetGrou
               </div>
             ))}
             <div>
-              <dt>다음 달 이월 예상</dt>
-              <dd>{formatSignedCurrency(item.monthly.remaining)}</dd>
+              <dt>다음 달 정산 반영</dt>
+              <dd>{formatSignedCurrency(item.monthly.settledCarryOver ?? 0)}</dd>
             </div>
           </dl>
 

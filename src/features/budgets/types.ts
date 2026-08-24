@@ -23,6 +23,16 @@ export interface BudgetEditorDraft {
   groups: BudgetEditorGroup[]
 }
 
+export interface BudgetSettlementEditorGroup {
+  name: string
+  currentRemaining: number
+  carryOver: string
+}
+
+export interface BudgetSettlementDraft {
+  groups: BudgetSettlementEditorGroup[]
+}
+
 export interface BudgetConfirmation {
   open: boolean
   title: string
@@ -31,6 +41,7 @@ export interface BudgetConfirmation {
   cancelLabel?: string
   busy?: boolean
   tone?: 'default' | 'danger'
+  confirmOnly?: boolean
   onConfirm: () => void
   onCancel: () => void
 }

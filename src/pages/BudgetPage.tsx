@@ -4,8 +4,9 @@ import type {
   BudgetConfirmation,
   BudgetEditorDraft,
   BudgetGroupView,
+  BudgetSettlementDraft,
 } from '@/features/budgets/types'
-import { formatCurrency, formatMonthLabel } from '@/features/readViews/formatters'
+import { formatCurrency, formatMonthLabel, formatSignedCurrency } from '@/features/readViews/formatters'
 import { MonthNavigator } from '@/features/readViews/components/MonthNavigator'
 
 export interface BudgetPageProps {
@@ -17,8 +18,11 @@ export interface BudgetPageProps {
   groups: BudgetGroupView[]
   selectedGroupName?: string
   isEditing?: boolean
+  isSettling?: boolean
   editorDraft: BudgetEditorDraft
+  settlementDraft: BudgetSettlementDraft
   saveConfirmation?: BudgetConfirmation
+  settlementWarning?: BudgetConfirmation
   isBusy?: boolean
   canWrite?: boolean
   monthNotice?: string
@@ -26,9 +30,13 @@ export interface BudgetPageProps {
   onNextMonth: () => void
   onSelectGroup?: (groupName: string) => void
   onStartEditing: () => void
+  onStartSettlement: () => void
   onCancelEditing: () => void
+  onCancelSettlement: () => void
   onEditorDraftChange: (draft: BudgetEditorDraft) => void
+  onSettlementDraftChange: (draft: BudgetSettlementDraft) => void
   onRequestSave: () => void
+  onRequestSettlement: () => void
 }
 
 function renderConfirmation(confirmation?: BudgetConfirmation) {
@@ -53,7 +61,7 @@ function renderConfirmation(confirmation?: BudgetConfirmation) {
           >
             {confirmation.busy ? '처리 중...' : confirmation.confirmLabel}
           </button>
-          <button
+          {!confirmation.confirmOnly ? <button
             type="button"
             className="secondary-button"
             onClick={confirmation.onCancel}
@@ -61,7 +69,7 @@ function renderConfirmation(confirmation?: BudgetConfirmation) {
             autoFocus
           >
             {confirmation.cancelLabel ?? '취소'}
-          </button>
+          </button> : null}
         </div>
       </section>
     </div>
@@ -79,6 +87,21 @@ function formatAmountInput(value: string): string {
   return digits ? Number(digits).toLocaleString('ko-KR') : ''
 }
 
+function parseSignedAmount(value: string): number | undefined {
+  if (!value.trim() || value.trim() === '-') return undefined
+  const amount = Number(value.replaceAll(',', ''))
+  return Number.isFinite(amount) ? amount : undefined
+}
+
+function formatSignedAmountInput(value: string): string {
+  const trimmed = value.trim()
+  const negative = trimmed.startsWith('-')
+  const digits = trimmed.replace(/[^0-9]/g, '')
+  if (!digits) return negative ? '-' : ''
+  const formatted = Number(digits).toLocaleString('ko-KR')
+  return negative ? `-${formatted}` : formatted
+}
+
 export default function BudgetPage({
   year,
   month,
@@ -88,8 +111,11 @@ export default function BudgetPage({
   groups,
   selectedGroupName,
   isEditing = false,
+  isSettling = false,
   editorDraft,
+  settlementDraft,
   saveConfirmation,
+  settlementWarning,
   isBusy = false,
   canWrite = true,
   monthNotice,
@@ -97,9 +123,13 @@ export default function BudgetPage({
   onNextMonth,
   onSelectGroup,
   onStartEditing,
+  onStartSettlement,
   onCancelEditing,
+  onCancelSettlement,
   onEditorDraftChange,
+  onSettlementDraftChange,
   onRequestSave,
+  onRequestSettlement,
 }: BudgetPageProps) {
   const [newGroupName, setNewGroupName] = useState('')
   const [addError, setAddError] = useState('')
@@ -120,6 +150,17 @@ export default function BudgetPage({
   )
   const budgetExceeded = parsedMaximum !== undefined && allocatedBudget > parsedMaximum
   const saveDisabled = isBusy || !canWrite || parsedMaximum === undefined || budgetExceeded
+  const settlementAmounts = settlementDraft.groups.map((group) => parseSignedAmount(group.carryOver))
+  const settlementHasInvalidAmount = settlementAmounts.some((amount) => amount === undefined)
+  const settlementTotal = settlementAmounts.reduce<number>(
+    (sum, amount) => sum + (amount ?? 0),
+    0,
+  )
+  const settlementOutOfRange = totalRemaining >= 0
+    ? settlementTotal !== totalRemaining
+    : settlementTotal < totalRemaining || settlementTotal > 0
+  const settlementSaveDisabled =
+    isBusy || !canWrite || settlementHasInvalidAmount || settlementOutOfRange
 
   const updateGroupAmount = (name: string, amount: number) => {
     onEditorDraftChange({
@@ -127,6 +168,16 @@ export default function BudgetPage({
       groups: editorDraft.groups.map((group) =>
         group.name === name
           ? { ...group, allocatedBudget: Math.max(0, Math.round(amount / 10_000) * 10_000) }
+          : group,
+      ),
+    })
+  }
+
+  const updateSettlementAmount = (name: string, value: string) => {
+    onSettlementDraftChange({
+      groups: settlementDraft.groups.map((group) =>
+        group.name === name
+          ? { ...group, carryOver: formatSignedAmountInput(value) }
           : group,
       ),
     })
@@ -201,7 +252,7 @@ export default function BudgetPage({
   }
 
   return (
-    <section className={`read-page budget-page${isEditing ? ' is-editing' : ''}`}>
+    <section className={`read-page budget-page${isEditing ? ' is-editing' : ''}${isSettling ? ' is-settling' : ''}`}>
       <header className="read-page__header budget-page__header">
         <div className="budget-page__title-row">
           <div>
@@ -230,15 +281,44 @@ export default function BudgetPage({
                   {isBusy ? '저장 중' : '저장'}
                 </button>
               </>
+            ) : isSettling ? (
+              <>
+                <button
+                  type="button"
+                  className="text-button budget-page__cancel-button"
+                  onClick={onCancelSettlement}
+                  disabled={isBusy}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  className="primary-button budget-page__save-button"
+                  onClick={onRequestSettlement}
+                  disabled={settlementSaveDisabled}
+                >
+                  {isBusy ? '정산 중' : '정산 완료'}
+                </button>
+              </>
             ) : (
-              <button
-                type="button"
-                className="secondary-button budget-page__edit-button"
-                onClick={onStartEditing}
-                disabled={isBusy || !canWrite || isBeforeBudgetStart}
-              >
-                편집
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="secondary-button budget-page__settlement-button"
+                  onClick={onStartSettlement}
+                  disabled={isBusy || !canWrite || isBeforeBudgetStart}
+                >
+                  정산
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button budget-page__edit-button"
+                  onClick={onStartEditing}
+                  disabled={isBusy || !canWrite || isBeforeBudgetStart}
+                >
+                  편집
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -250,8 +330,8 @@ export default function BudgetPage({
         <MonthNavigator
           year={year}
           month={month}
-          canGoPrevious={canGoPrevious && !isEditing}
-          canGoNext={canGoNext && !isEditing}
+          canGoPrevious={canGoPrevious && !isEditing && !isSettling}
+          canGoNext={canGoNext && !isEditing && !isSettling}
           onPrevious={onPreviousMonth}
           onNext={onNextMonth}
           notice={monthNotice}
@@ -262,7 +342,7 @@ export default function BudgetPage({
         <section className={`panel budget-page__plan${budgetExceeded ? ' is-over-limit' : ''}`} aria-labelledby="budget-plan-title">
           <div className="budget-page__plan-heading">
             <div>
-              <p className="budget-page__section-kicker">이월 제외</p>
+              <p className="budget-page__section-kicker">전월 정산 반영 제외</p>
               <h3 id="budget-plan-title">최대 예산</h3>
             </div>
             <label className="budget-page__maximum-field">
@@ -291,7 +371,7 @@ export default function BudgetPage({
           <div className="budget-page__allocation-track" aria-hidden="true">
             <span style={{ width: `${parsedMaximum && parsedMaximum > 0 ? Math.min(100, (allocatedBudget / parsedMaximum) * 100) : 0}%` }} />
           </div>
-          <p className="budget-page__carry-over-summary">이월된 예산 {formatCurrency(carryOverBudget)}</p>
+          <p className="budget-page__carry-over-summary">전월 정산 반영액 {formatCurrency(carryOverBudget)}</p>
           {budgetExceeded ? (
             <p className="form-error" role="alert">
               할당된 예산이 최대 예산보다 {formatCurrency(Math.abs(unallocatedBudget))} 많습니다. 카테고리 예산을 줄여주세요.
@@ -299,6 +379,39 @@ export default function BudgetPage({
           ) : null}
           {!canWrite ? (
             <p className="form-status">Google 로그인과 Sheet 접근 확인이 완료되면 예산을 변경할 수 있습니다.</p>
+          ) : null}
+        </section>
+      ) : isSettling ? (
+        <section
+          className={`panel budget-page__plan budget-page__settlement-plan${settlementOutOfRange ? ' is-over-limit' : ''}`}
+          aria-labelledby="budget-settlement-title"
+        >
+          <div className="budget-page__plan-heading">
+            <div>
+              <p className="budget-page__section-kicker">자동 이월 없음</p>
+              <h3 id="budget-settlement-title">정산 이월 계획</h3>
+            </div>
+            <strong className={totalRemaining < 0 ? 'is-negative' : ''}>
+              {formatSignedCurrency(totalRemaining)}
+            </strong>
+          </div>
+          <div className="budget-page__allocation-summary">
+            <span>다음 달 반영 합계</span>
+            <strong>{formatSignedCurrency(settlementTotal)}</strong>
+          </div>
+          <p className="budget-page__carry-over-summary">
+            {totalRemaining >= 0
+              ? '이번 달 전체 잔액은 고정입니다. 합계가 일치하도록 카테고리별로 배분해주세요.'
+              : '부족액을 그대로 넘기거나, 카테고리별로 0원까지 손실 처리할 수 있습니다.'}
+          </p>
+          {settlementHasInvalidAmount ? (
+            <p className="form-error" role="alert">카테고리별 정산 금액을 입력해주세요.</p>
+          ) : settlementOutOfRange ? (
+            <p className="form-error" role="alert">
+              {totalRemaining >= 0
+                ? `배분 합계가 ${formatSignedCurrency(totalRemaining)}이 되어야 합니다.`
+                : `반영 합계는 ${formatSignedCurrency(totalRemaining)}부터 0원 사이여야 합니다.`}
+            </p>
           ) : null}
         </section>
       ) : isBeforeBudgetStart ? (
@@ -324,7 +437,80 @@ export default function BudgetPage({
         </section>
       )}
 
-      {isEditing ? (
+      {isSettling ? (
+        <section className="budget-page__editor-groups" aria-labelledby="budget-settlement-groups-title">
+          <div className="budget-page__editor-heading">
+            <div>
+              <h3 id="budget-settlement-groups-title">카테고리별 정산</h3>
+              <p>음수 이월도 가능하며, 직접 입력하거나 −/+ 버튼으로 1만원씩 조절할 수 있습니다.</p>
+            </div>
+            <span>{settlementDraft.groups.length}개</span>
+          </div>
+          <div className="budget-page__editor-list">
+            {settlementDraft.groups.map((group) => {
+              const parsedCarryOver = parseSignedAmount(group.carryOver) ?? 0
+              return (
+                <article key={group.name} className="budget-editor-card budget-settlement-card">
+                  <div className="budget-settlement-card__heading">
+                    <div>
+                      <h4>{group.name}</h4>
+                      <span>현재 잔액 {formatSignedCurrency(group.currentRemaining)}</span>
+                    </div>
+                    <div className="budget-settlement-card__quick-actions">
+                      <button
+                        type="button"
+                        onClick={() => updateSettlementAmount(group.name, String(group.currentRemaining))}
+                        disabled={isBusy || !canWrite}
+                      >
+                        잔액 복원
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateSettlementAmount(group.name, '0')}
+                        disabled={isBusy || !canWrite}
+                      >
+                        0원 처리
+                      </button>
+                    </div>
+                  </div>
+                  <div className="budget-settlement-card__controls">
+                    <label className="budget-settlement-card__amount">
+                      <span className="sr-only">{group.name} 정산 이월액</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        value={group.carryOver}
+                        onChange={(event) => updateSettlementAmount(group.name, event.target.value)}
+                        disabled={isBusy || !canWrite}
+                      />
+                      <span aria-hidden="true">원</span>
+                    </label>
+                    <div className="budget-editor-card__fine-controls" aria-label={`${group.name} 정산 미세 조정`}>
+                      <button
+                        type="button"
+                        aria-label={`${group.name} 정산액 1만원 줄이기`}
+                        onClick={() => updateSettlementAmount(group.name, String(parsedCarryOver - 10_000))}
+                        disabled={isBusy || !canWrite}
+                      >
+                        −
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`${group.name} 정산액 1만원 늘리기`}
+                        onClick={() => updateSettlementAmount(group.name, String(parsedCarryOver + 10_000))}
+                        disabled={isBusy || !canWrite}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      ) : isEditing ? (
         <section className="budget-page__editor-groups" aria-labelledby="budget-editor-groups-title">
           <div className="budget-page__editor-heading">
             <div>
@@ -470,6 +656,7 @@ export default function BudgetPage({
       )}
 
       {renderConfirmation(saveConfirmation)}
+      {renderConfirmation(settlementWarning)}
     </section>
   )
 }

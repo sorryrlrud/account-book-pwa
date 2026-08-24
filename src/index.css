@@ -1020,6 +1020,7 @@ button:not(:disabled):active {
 }
 
 .budget-page__edit-button,
+.budget-page__settlement-button,
 .budget-page__save-button {
   min-width: 68px;
 }
@@ -1188,6 +1189,17 @@ button:not(:disabled):active {
   margin: -2px 0 0;
   color: var(--color-muted);
   font-size: 0.76rem;
+}
+
+.budget-page__settlement-plan .budget-page__plan-heading > strong {
+  color: var(--color-primary);
+  font-size: 1.12rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.budget-page__settlement-plan .budget-page__plan-heading > strong.is-negative {
+  color: var(--color-danger);
 }
 
 .budget-group-card {
@@ -1462,6 +1474,60 @@ button:not(:disabled):active {
   font-weight: 800;
 }
 
+.budget-settlement-card__heading,
+.budget-settlement-card__controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.budget-settlement-card__heading h4 {
+  margin: 0 0 3px;
+}
+
+.budget-settlement-card__heading span {
+  color: var(--color-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.budget-settlement-card__quick-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 3px;
+}
+
+.budget-settlement-card__quick-actions button {
+  min-height: 34px;
+  padding: 5px 7px;
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.budget-settlement-card__amount {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-muted);
+  font-weight: 700;
+}
+
+.budget-settlement-card__amount input {
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 10px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .budget-page__add-category {
   gap: 11px;
   border-style: dashed;
@@ -1641,6 +1707,12 @@ button:not(:disabled):active {
     gap: 0;
   }
 
+  .budget-page__settlement-button,
+  .budget-page__edit-button {
+    min-width: 58px;
+    padding-inline: 8px;
+  }
+
   .budget-page__cancel-button {
     padding-inline: 9px;
   }
@@ -1668,6 +1740,16 @@ button:not(:disabled):active {
   .budget-editor-card__remove {
     grid-column: 3;
     grid-row: 1;
+  }
+
+  .budget-settlement-card__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .budget-settlement-card__quick-actions {
+    align-self: stretch;
+    justify-content: flex-end;
   }
 }
 
