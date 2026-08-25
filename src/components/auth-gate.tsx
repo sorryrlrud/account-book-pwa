@@ -59,7 +59,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
               void runAction(
                 isNetworkError
                   ? () => service.bootstrap()
-                  : isExpired || isAccessDenied
+                  : isAccessDenied
                     ? () => service.relogin()
                     : () => service.login(),
               )

@@ -55,7 +55,7 @@ export default defineConfig({
     buildVersionFile(appVersion),
     VitePWA({
       injectRegister: false,
-      selfDestroying: true,
+      registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         name: '모바일 가계부',

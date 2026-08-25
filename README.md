@@ -92,6 +92,9 @@ https://sorryrlrud.github.io
 - GitHub Pages는 origin 단위로 등록한다. repository path는 origin에 포함하지 않는다.
 - 이 앱은 backend redirect flow가 아니라 browser token flow를 전제로 한다.
 - 이메일 scope는 요청하지 않으며 설정 화면에는 Google 계정의 연결 상태만 표시한다.
+- 설치 PWA를 다시 열었을 때 현재 실행 세션의 access token이 남아 있으면 자동 복구한다.
+- token이 만료되었거나 실행 세션이 종료된 경우 한 번의 사용자 탭으로 새 token을 요청하되,
+  접근 거부로 다른 계정이 필요한 경우에만 Google 계정 선택을 강제한다.
 
 ## Google Spreadsheet setup
 

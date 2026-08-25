@@ -10,6 +10,7 @@ import {
   type AppService,
 } from '@/app/app-service-core.ts'
 import { AppServiceController } from '@/app/app-service-controller.ts'
+import { loadGoogleIdentityScript } from '@/app/google-identity-script.ts'
 
 export function AppServiceProvider({ children }: { children: ReactNode }) {
   const controllerRef = useRef<AppServiceController | null>(null)
@@ -19,6 +20,14 @@ export function AppServiceProvider({ children }: { children: ReactNode }) {
 
   const controller = controllerRef.current
   useEffect(() => {
+    // Start loading GIS before the user taps the login button. Calling the
+    // token client directly from that tap keeps popup handling inside the
+    // browser's user-activation window, which is especially important in an
+    // installed mobile PWA.
+    void loadGoogleIdentityScript().catch(() => {
+      // Login retries the load and surfaces a user-facing error if Google is
+      // still unavailable. Preloading itself should not block the app shell.
+    })
     void controller.resumeSession()
   }, [controller])
 
