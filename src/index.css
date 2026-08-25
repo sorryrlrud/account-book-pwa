@@ -801,14 +801,15 @@ button:not(:disabled):active {
 
 .account-balances__list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 .account-balances__item {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
   padding: 11px 12px;
   border: 1px solid #e4e9e5;
   border-radius: var(--radius-sm);
@@ -825,6 +826,7 @@ button:not(:disabled):active {
 }
 
 .account-balances__item strong {
+  white-space: nowrap;
   font-size: 0.94rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.35;

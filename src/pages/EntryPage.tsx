@@ -43,7 +43,7 @@ export function EntryPage() {
   } | null>(null)
   const savingRef = useRef(false)
   const failedRequestRef = useRef<TransactionFormSubmitPayload | null>(null)
-  const getSettlement = service.getSettlement
+  const getAccountBalances = service.getAccountBalances
 
   useEffect(() => {
     let active = true
@@ -54,17 +54,17 @@ export function EntryPage() {
 
     const { year, month } = getYearMonthFromDate(formPreview!.date)
     setAccountBalances({})
-    void getSettlement(year, month).then((settlement) => {
+    void getAccountBalances(year, month).then((balances) => {
       if (!active) return
       setAccountBalances(Object.fromEntries(
-        settlement.accounts.map((account) => [account.account, account.currentMonthBalance]),
+        balances.map((account) => [account.account, account.balance]),
       ))
     }).catch(() => {
       if (active) setAccountBalances({})
     })
 
     return () => { active = false }
-  }, [balanceRevision, formPreview?.date, getSettlement, service.auth.canRead])
+  }, [balanceRevision, formPreview?.date, getAccountBalances, service.auth.canRead])
 
   useEffect(() => {
     let active = true

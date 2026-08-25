@@ -86,16 +86,10 @@ function renderHistory(overrides: Partial<AppService> = {}) {
       }]]),
     }),
     listTransactions,
-    getSettlement: vi.fn().mockResolvedValue({
-      year: 2026,
-      month: 8,
-      income: 3_000_000,
-      expense: 62_500,
-      accounts: [
-        { account: '생활비 카드', previousMonthBalance: 800_000, currentMonthBalance: 737_500, delta: -62_500 },
-        { account: '저축 통장', previousMonthBalance: 4_000_000, currentMonthBalance: 5_000_000, delta: 1_000_000 },
-      ],
-    }),
+    getAccountBalances: vi.fn().mockResolvedValue([
+      { account: '생활비 카드', balance: 737_500 },
+      { account: '저축 통장', balance: 5_000_000 },
+    ]),
     ...overrides,
   }
 

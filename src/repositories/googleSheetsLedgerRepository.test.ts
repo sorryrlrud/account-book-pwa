@@ -189,6 +189,18 @@ function withOpeningBalanceSnapshot(
   return nextRow
 }
 
+function withMonthlyAccountBalance(
+  row: string[],
+  account: string,
+  balance: string,
+): string[] {
+  const nextRow = [...row]
+  while (nextRow.length < 9) nextRow.push('')
+  nextRow[6] = account
+  nextRow[8] = balance
+  return nextRow
+}
+
 function withLegacyCalculatedCells(row: string[], marker: string): string[] {
   const nextRow = [...row]
   nextRow[5] = `=${marker}-legacy-formula`
@@ -214,6 +226,37 @@ describe('GoogleSheetsLedgerRepository', () => {
           spreadsheetId === 'sheet-2026' && range === buildRange('앱설정', 'A:B'),
       ),
     ).toHaveLength(1)
+  })
+
+  it('reads monthly account balances directly from G2:I8', async () => {
+    const { repository, fakeSheetsClient } = createHarness({
+      workbooks: [
+        createLedgerWorkbook({
+          spreadsheetId: 'sheet-2026',
+          year: 2026,
+          sheetValues: {
+            '8': [
+              [],
+              withMonthlyAccountBalance([], '우리', '₩610'),
+              withMonthlyAccountBalance([], '토스', '₩2,109,942'),
+              withMonthlyAccountBalance([], '윤사', '-₩2,919,184'),
+              [],
+            ],
+          },
+        }),
+      ],
+    })
+    const getValues = vi.spyOn(fakeSheetsClient, 'getValues')
+
+    await expect(repository.getAccountBalances(2026, 8)).resolves.toEqual([
+      { account: '우리', balance: 610 },
+      { account: '토스', balance: 2_109_942 },
+      { account: '윤사', balance: -2_919_184 },
+    ])
+    expect(getValues).toHaveBeenCalledWith(
+      'sheet-2026',
+      buildRange('8', 'G2:I8'),
+    )
   })
 
   it('builds settlement balances from month 0 plus prior months and uses only the selected month for income and expense totals', async () => {

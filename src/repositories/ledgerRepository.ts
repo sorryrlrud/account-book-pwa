@@ -1,4 +1,4 @@
-import type { Account, AccountMutation } from '@/domain/account.ts'
+import type { Account, AccountBalance, AccountMutation } from '@/domain/account.ts'
 import type {
   BudgetGroup,
   BudgetGroupMutation,
@@ -29,6 +29,7 @@ export interface LedgerRepository {
   verifyAccess(spreadsheetId: string): Promise<YearConfig>
   getYearGraph(): Promise<YearGraph>
   getMonthTransactions(year: number, month: number): Promise<Transaction[]>
+  getAccountBalances(year: number, month: number): Promise<AccountBalance[]>
   appendTransaction(draft: TransactionDraft): Promise<SavedTransactionResult>
   updateTransaction(lookup: TransactionLookup, draft: TransactionDraft): Promise<SavedTransactionResult>
   deleteTransaction(lookup: TransactionLookup): Promise<void>

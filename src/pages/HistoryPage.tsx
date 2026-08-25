@@ -5,7 +5,7 @@ import { currentMonthValue, formatDateHeading, formatMonthLabel, shiftMonth } fr
 import { formatKrw } from '@/features/transactions/format.ts'
 import { TransactionForm } from '@/features/transactions/TransactionForm.tsx'
 import type { Transaction } from '@/domain/transaction.ts'
-import type { AccountSettlement } from '@/domain/settlement.ts'
+import type { AccountBalance } from '@/domain/account.ts'
 import type { TransactionFormSubmitPayload } from '@/features/transactions/types.ts'
 
 const DEFAULT_FILTERS: HistoryFilters = {
@@ -24,7 +24,7 @@ export function HistoryPage() {
   const { accounts, categories } = useReferenceData()
   const [filters, setFilters] = useState<HistoryFilters>(DEFAULT_FILTERS)
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [accountBalances, setAccountBalances] = useState<AccountSettlement[]>([])
+  const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [statusMessage, setStatusMessage] = useState('이번 달 내역을 불러올 수 있습니다.')
@@ -36,7 +36,7 @@ export function HistoryPage() {
   const [linkedYears, setLinkedYears] = useState<Set<number>>()
   const loadRequestRef = useRef(0)
   const listTransactions = service.listTransactions
-  const getSettlement = service.getSettlement
+  const getAccountBalances = service.getAccountBalances
   const getYearGraph = service.getYearGraph
 
   useEffect(() => {
@@ -62,13 +62,13 @@ export function HistoryPage() {
 
     try {
       const [year, month] = nextFilters.month.split('-').map(Number)
-      const [result, settlement] = await Promise.all([
+      const [result, balances] = await Promise.all([
         listTransactions(nextFilters),
-        getSettlement(year, month),
+        getAccountBalances(year, month),
       ])
       if (loadRequestRef.current !== requestId) return
       setTransactions(result)
-      setAccountBalances(settlement.accounts)
+      setAccountBalances(balances)
       setStatusMessage(result.length ? '내역을 불러왔습니다.' : '표시할 내역이 없습니다.')
     } catch (error) {
       if (loadRequestRef.current !== requestId) return
@@ -83,7 +83,7 @@ export function HistoryPage() {
         setIsLoading(false)
       }
     }
-  }, [getSettlement, listTransactions])
+  }, [getAccountBalances, listTransactions])
 
   useEffect(() => {
     void loadTransactions({
@@ -325,8 +325,8 @@ export function HistoryPage() {
             {accountBalances.map((account) => (
               <div className="account-balances__item" key={account.account}>
                 <span>{account.account}</span>
-                <strong className={account.currentMonthBalance < 0 ? 'is-negative' : ''}>
-                  {formatKrw(account.currentMonthBalance)}
+                <strong className={account.balance < 0 ? 'is-negative' : ''}>
+                  {formatKrw(account.balance)}
                 </strong>
               </div>
             ))}

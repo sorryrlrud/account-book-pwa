@@ -1,4 +1,4 @@
-import type { Account, AccountMutation } from '@/domain/account.ts'
+import type { Account, AccountBalance, AccountMutation } from '@/domain/account.ts'
 import {
   buildBudgetTimeline,
   MONTHLY_BUDGET_LIMIT_GROUP,
@@ -172,6 +172,26 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
 
   async getMonthTransactions(year: number, month: number): Promise<Transaction[]> {
     return collapseTransferPairs(await this.#getRawMonthTransactions(year, month))
+  }
+
+  async getAccountBalances(year: number, month: number): Promise<AccountBalance[]> {
+    assertMonth(month)
+    if (month === 0) {
+      throw new AppError('VALIDATION_ERROR', '통장 잔고는 1월부터 12월까지 조회할 수 있습니다.')
+    }
+
+    const config = await this.#resolveYearConfig(year)
+    const values = await this.#sheetsClient.getValues(
+      config.spreadsheetId,
+      buildRange(String(month), 'G2:I8'),
+    )
+
+    return (values.values ?? []).flatMap((row) => {
+      const account = trimCell(row[0])
+      return account
+        ? [{ account, balance: parseSheetNumber(row[2]) }]
+        : []
+    })
   }
 
   async #getRawMonthTransactions(year: number, month: number): Promise<Transaction[]> {

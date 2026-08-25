@@ -5,6 +5,11 @@ export interface Account {
   order: number
 }
 
+export interface AccountBalance {
+  account: string
+  balance: number
+}
+
 export interface AccountMutation {
   name: string
   assetGroup?: string

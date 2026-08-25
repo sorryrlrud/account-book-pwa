@@ -493,6 +493,12 @@ export class AppServiceController {
     })
   }
 
+  async getAccountBalances(year: number, month: number) {
+    return this.#withRepository((repository) =>
+      repository.getAccountBalances(year, month),
+    )
+  }
+
   async saveTransaction(draft: TransactionDraft): Promise<SavedTransactionResult> {
     const { year, month } = getYearMonthFromDate(draft.date)
     this.setCurrentYearMonth(year, month)

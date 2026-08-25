@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { Account, AccountMutation } from '@/domain/account.ts'
+import type { Account, AccountBalance, AccountMutation } from '@/domain/account.ts'
 import type {
   BudgetGroup,
   BudgetGroupMutation,
@@ -86,6 +86,7 @@ export interface AppService extends AppServiceState {
   setCurrentYearMonth(year: number, month: number): void
   getReferenceData(year?: number): Promise<TransactionReferenceData>
   listTransactions(filters: HistoryFilters): Promise<Transaction[]>
+  getAccountBalances(year: number, month: number): Promise<AccountBalance[]>
   saveTransaction(draft: TransactionDraft): Promise<SavedTransactionResult>
   updateTransaction(
     transaction: Transaction,
@@ -161,6 +162,10 @@ class UnconfiguredAppService implements AppService {
   }
 
   async listTransactions(_filters: HistoryFilters): Promise<Transaction[]> {
+    return []
+  }
+
+  async getAccountBalances(): Promise<AccountBalance[]> {
     return []
   }
 

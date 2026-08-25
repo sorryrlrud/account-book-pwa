@@ -45,6 +45,7 @@ export function AppServiceProvider({ children }: { children: ReactNode }) {
     setCurrentYearMonth: (year, month) => controller.setCurrentYearMonth(year, month),
     getReferenceData: (year) => controller.getReferenceData(year),
     listTransactions: (filters) => controller.listTransactions(filters),
+    getAccountBalances: (year, month) => controller.getAccountBalances(year, month),
     saveTransaction: (draft) => controller.saveTransaction(draft),
     updateTransaction: (transaction, draft) =>
       controller.updateTransaction(transaction, draft),
