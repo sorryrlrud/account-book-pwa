@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { formatDateHeading, shiftDate } from '@/features/transactions/date.ts'
-import { parseAmountInput, toAmountInput } from '@/features/transactions/format.ts'
+import { formatKrw, parseAmountInput, toAmountInput } from '@/features/transactions/format.ts'
 import type {
   EntryMode,
   EntryTab,
@@ -21,6 +21,7 @@ interface TransactionFormProps {
   errorMessage: string
   statusMessage: string
   budgetHint?: string
+  accountBalances?: Readonly<Record<string, number>>
   initialTransaction?: Transaction
   resetState?: TransactionFormState | null
   onSubmit: (payload: TransactionFormSubmitPayload) => Promise<void> | void
@@ -84,6 +85,7 @@ export function TransactionForm({
   errorMessage,
   statusMessage,
   budgetHint,
+  accountBalances,
   initialTransaction,
   resetState,
   onSubmit,
@@ -217,6 +219,16 @@ export function TransactionForm({
     initialTransaction?.destinationAccount,
   ])
   const categoryOptions = buildOptions(categories, [initialTransaction?.category])
+  const amount = parseAmountInput(form.amountInput)
+  const hasAmount = Number.isFinite(amount) && amount > 0
+  const accountBalance = accountBalances?.[form.account]
+  const destinationAccountBalance = accountBalances?.[form.destinationAccount]
+  const accountBalanceAfterInput = accountBalance === undefined
+    ? undefined
+    : accountBalance + (form.type === 'income' ? amount : -amount)
+  const destinationBalanceAfterInput = destinationAccountBalance === undefined
+    ? undefined
+    : destinationAccountBalance + amount
 
   const handleReset = () => {
     if (initialTransaction) {
@@ -364,6 +376,14 @@ export function TransactionForm({
           }
           disabled={isBusy}
         />
+        {hasAmount && accountBalanceAfterInput !== undefined ? (
+          <p className="balance-preview" aria-live="polite">
+            입력 후 {form.account} <strong>{formatKrw(accountBalanceAfterInput)}</strong>
+            {form.type === 'transfer' && destinationBalanceAfterInput !== undefined
+              ? <> · {form.destinationAccount} <strong>{formatKrw(destinationBalanceAfterInput)}</strong></>
+              : null}
+          </p>
+        ) : null}
       </label>
 
       <label className="field" htmlFor={`${formId}-description`}>
@@ -395,6 +415,11 @@ export function TransactionForm({
               </option>
             ))}
           </select>
+          {accountBalance !== undefined ? (
+            <small className="account-balance-hint">
+              현재 잔액 {formatKrw(accountBalance)}
+            </small>
+          ) : null}
         </label>
 
         {form.type === 'transfer' ? (
@@ -417,6 +442,11 @@ export function TransactionForm({
                 </option>
               ))}
             </select>
+            {destinationAccountBalance !== undefined ? (
+              <small className="account-balance-hint">
+                현재 잔액 {formatKrw(destinationAccountBalance)}
+              </small>
+            ) : null}
           </label>
         ) : (
           <div className="field">

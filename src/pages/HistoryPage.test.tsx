@@ -86,6 +86,16 @@ function renderHistory(overrides: Partial<AppService> = {}) {
       }]]),
     }),
     listTransactions,
+    getSettlement: vi.fn().mockResolvedValue({
+      year: 2026,
+      month: 8,
+      income: 3_000_000,
+      expense: 62_500,
+      accounts: [
+        { account: '생활비 카드', previousMonthBalance: 800_000, currentMonthBalance: 737_500, delta: -62_500 },
+        { account: '저축 통장', previousMonthBalance: 4_000_000, currentMonthBalance: 5_000_000, delta: 1_000_000 },
+      ],
+    }),
     ...overrides,
   }
 
@@ -103,11 +113,15 @@ describe('HistoryPage', () => {
     renderHistory()
 
     const statistics = await screen.findByRole('heading', { name: '카테고리 통계' })
+    const balances = screen.getByRole('heading', { name: '통장별 잔액' })
     const filters = screen.getByRole('heading', { name: '필터링 및 검색' })
     const details = screen.getByRole('heading', { name: '월별 내역' })
 
     expect(screen.getByText(/₩12,500 · 100%/)).toBeVisible()
     expect(within(statistics.closest('section')!).queryByText('미분류')).not.toBeInTheDocument()
+    expect(balances.compareDocumentPosition(statistics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(balances.closest('section')!).getByText('₩737,500')).toBeVisible()
+    expect(within(balances.closest('section')!).getByText('₩5,000,000')).toBeVisible()
     expect(statistics.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(filters.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })

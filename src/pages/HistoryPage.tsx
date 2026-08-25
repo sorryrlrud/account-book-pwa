@@ -5,6 +5,7 @@ import { currentMonthValue, formatDateHeading, formatMonthLabel, shiftMonth } fr
 import { formatKrw } from '@/features/transactions/format.ts'
 import { TransactionForm } from '@/features/transactions/TransactionForm.tsx'
 import type { Transaction } from '@/domain/transaction.ts'
+import type { AccountSettlement } from '@/domain/settlement.ts'
 import type { TransactionFormSubmitPayload } from '@/features/transactions/types.ts'
 
 const DEFAULT_FILTERS: HistoryFilters = {
@@ -23,6 +24,7 @@ export function HistoryPage() {
   const { accounts, categories } = useReferenceData()
   const [filters, setFilters] = useState<HistoryFilters>(DEFAULT_FILTERS)
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [accountBalances, setAccountBalances] = useState<AccountSettlement[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [statusMessage, setStatusMessage] = useState('이번 달 내역을 불러올 수 있습니다.')
@@ -34,6 +36,7 @@ export function HistoryPage() {
   const [linkedYears, setLinkedYears] = useState<Set<number>>()
   const loadRequestRef = useRef(0)
   const listTransactions = service.listTransactions
+  const getSettlement = service.getSettlement
   const getYearGraph = service.getYearGraph
 
   useEffect(() => {
@@ -55,15 +58,22 @@ export function HistoryPage() {
     setErrorMessage('')
     setStatusMessage('내역을 불러오는 중입니다.')
     setTransactions([])
+    setAccountBalances([])
 
     try {
-      const result = await listTransactions(nextFilters)
+      const [year, month] = nextFilters.month.split('-').map(Number)
+      const [result, settlement] = await Promise.all([
+        listTransactions(nextFilters),
+        getSettlement(year, month),
+      ])
       if (loadRequestRef.current !== requestId) return
       setTransactions(result)
+      setAccountBalances(settlement.accounts)
       setStatusMessage(result.length ? '내역을 불러왔습니다.' : '표시할 내역이 없습니다.')
     } catch (error) {
       if (loadRequestRef.current !== requestId) return
       setTransactions([])
+      setAccountBalances([])
       setStatusMessage('')
       setErrorMessage(
         error instanceof Error ? error.message : '내역을 불러오지 못했습니다.',
@@ -73,7 +83,7 @@ export function HistoryPage() {
         setIsLoading(false)
       }
     }
-  }, [listTransactions])
+  }, [getSettlement, listTransactions])
 
   useEffect(() => {
     void loadTransactions({
@@ -301,6 +311,31 @@ export function HistoryPage() {
 
         {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
         {statusMessage ? <p className="form-status">{statusMessage}</p> : null}
+      </section>
+
+      <section className="panel account-balances" aria-labelledby="account-balances-title">
+        <div className="panel__header">
+          <div>
+            <h2 id="account-balances-title">통장별 잔액</h2>
+            <p className="panel__description">{formatMonthLabel(filters.month)} 말 기준</p>
+          </div>
+        </div>
+        {accountBalances.length ? (
+          <div className="account-balances__list">
+            {accountBalances.map((account) => (
+              <div className="account-balances__item" key={account.account}>
+                <span>{account.account}</span>
+                <strong className={account.currentMonthBalance < 0 ? 'is-negative' : ''}>
+                  {formatKrw(account.currentMonthBalance)}
+                </strong>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-state">
+            {isLoading ? '통장 잔액을 불러오는 중입니다.' : '표시할 통장 잔액이 없습니다.'}
+          </p>
+        )}
       </section>
 
       <section className="panel category-statistics" aria-labelledby="category-statistics-title">

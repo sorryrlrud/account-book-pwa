@@ -130,6 +130,27 @@ describe('TransactionForm', () => {
     })
   })
 
+  it('shows current and calculated balances for expenses, income, and transfers', async () => {
+    const user = userEvent.setup()
+    const { container } = renderForm({
+      accountBalances: { Checking: 900_000, Savings: 2_100_000 },
+    })
+    const amountInput = container.querySelector('input[inputmode="numeric"]') as HTMLInputElement
+
+    expect(screen.getByText('현재 잔액 ₩900,000')).toBeVisible()
+    await user.type(amountInput, '15000')
+    expect(screen.getByText(/입력 후 Checking/)).toHaveTextContent('입력 후 Checking ₩885,000')
+
+    await user.click(screen.getByRole('tab', { name: '수입' }))
+    expect(screen.getByText(/입력 후 Checking/)).toHaveTextContent('입력 후 Checking ₩915,000')
+
+    await user.click(screen.getByRole('tab', { name: '이체' }))
+    expect(screen.getByText('현재 잔액 ₩2,100,000')).toBeVisible()
+    expect(screen.getByText(/입력 후 Checking/)).toHaveTextContent(
+      '입력 후 Checking ₩885,000 · Savings ₩2,115,000',
+    )
+  })
+
   it('applies the parent resetState after save and preserves date and account', async () => {
     const user = userEvent.setup()
     const observedPayloads: TransactionFormSubmitPayload[] = []

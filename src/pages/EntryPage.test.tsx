@@ -44,6 +44,16 @@ function renderEntry(saveTransaction: AppService['saveTransaction']) {
       budgetGroups: [],
     }),
     getBudgets: vi.fn().mockResolvedValue([]),
+    getSettlement: vi.fn().mockResolvedValue({
+      year: 2026,
+      month: 8,
+      income: 0,
+      expense: 0,
+      accounts: [
+        { account: 'Checking', previousMonthBalance: 1_000_000, currentMonthBalance: 900_000, delta: -100_000 },
+        { account: 'Savings', previousMonthBalance: 2_000_000, currentMonthBalance: 2_100_000, delta: 100_000 },
+      ],
+    }),
     saveTransaction,
   }
 

@@ -35,12 +35,36 @@ export function EntryPage() {
   const [recentSaved, setRecentSaved] = useState<Transaction | null>(null)
   const [formResetState, setFormResetState] = useState<TransactionFormState | null>(null)
   const [formPreview, setFormPreview] = useState<TransactionFormState | null>(null)
+  const [accountBalances, setAccountBalances] = useState<Record<string, number>>({})
+  const [balanceRevision, setBalanceRevision] = useState(0)
   const [budgetContext, setBudgetContext] = useState<{
     groupName: string
     remaining: number
   } | null>(null)
   const savingRef = useRef(false)
   const failedRequestRef = useRef<TransactionFormSubmitPayload | null>(null)
+  const getSettlement = service.getSettlement
+
+  useEffect(() => {
+    let active = true
+    if (!service.auth.canRead || !/^\d{4}-\d{2}-\d{2}$/.test(formPreview?.date ?? '')) {
+      setAccountBalances({})
+      return () => { active = false }
+    }
+
+    const { year, month } = getYearMonthFromDate(formPreview!.date)
+    setAccountBalances({})
+    void getSettlement(year, month).then((settlement) => {
+      if (!active) return
+      setAccountBalances(Object.fromEntries(
+        settlement.accounts.map((account) => [account.account, account.currentMonthBalance]),
+      ))
+    }).catch(() => {
+      if (active) setAccountBalances({})
+    })
+
+    return () => { active = false }
+  }, [balanceRevision, formPreview?.date, getSettlement, service.auth.canRead])
 
   useEffect(() => {
     let active = true
@@ -131,6 +155,7 @@ export function EntryPage() {
       const result = await service.saveTransaction(requestPayload.draft)
       setRecentSaved(result.transaction)
       setFormResetState(payload.resetState)
+      setBalanceRevision((current) => current + 1)
       failedRequestRef.current = null
       setStatusMessage('저장이 완료되었습니다.')
     } catch (error) {
@@ -166,6 +191,7 @@ export function EntryPage() {
         errorMessage={errorMessage}
         statusMessage={statusMessage}
         budgetHint={budgetHint}
+        accountBalances={accountBalances}
         resetState={formResetState}
         onStateChange={handleFormStateChange}
         onSubmit={saveEntry}
