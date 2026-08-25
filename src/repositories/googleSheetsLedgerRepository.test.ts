@@ -228,7 +228,7 @@ describe('GoogleSheetsLedgerRepository', () => {
     ).toHaveLength(1)
   })
 
-  it('reads monthly account balances directly from G2:I8', async () => {
+  it('reads cash and credit-card balances directly from the monthly balance cells', async () => {
     const { repository, fakeSheetsClient } = createHarness({
       workbooks: [
         createLedgerWorkbook({
@@ -241,6 +241,13 @@ describe('GoogleSheetsLedgerRepository', () => {
               withMonthlyAccountBalance([], '토스', '₩2,109,942'),
               withMonthlyAccountBalance([], '윤사', '-₩2,919,184'),
               [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              withMonthlyAccountBalance([], '네페', '-₩2,617,400'),
+              withMonthlyAccountBalance([], '현카', '-₩52,670'),
             ],
           },
         }),
@@ -252,11 +259,15 @@ describe('GoogleSheetsLedgerRepository', () => {
       { account: '우리', balance: 610 },
       { account: '토스', balance: 2_109_942 },
       { account: '윤사', balance: -2_919_184 },
+      { account: '네페', balance: -2_617_400 },
+      { account: '현카', balance: -52_670 },
     ])
-    expect(getValues).toHaveBeenCalledWith(
-      'sheet-2026',
-      buildRange('8', 'G2:I8'),
-    )
+    expect(fakeSheetsClient.batchGetValuesCalls).toContainEqual({
+      spreadsheetId: 'sheet-2026',
+      ranges: [buildRange('8', 'G2:I8'), buildRange('8', 'G11:I12')],
+    })
+    expect(getValues).toHaveBeenCalledWith('sheet-2026', buildRange('8', 'G2:I8'))
+    expect(getValues).toHaveBeenCalledWith('sheet-2026', buildRange('8', 'G11:I12'))
   })
 
   it('builds settlement balances from month 0 plus prior months and uses only the selected month for income and expense totals', async () => {

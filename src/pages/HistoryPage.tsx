@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type HistoryFilters } from '@/app/app-service-core.ts'
 import { useAppService, useReferenceData } from '@/app/use-app-service.ts'
 import { currentMonthValue, formatDateHeading, formatMonthLabel, shiftMonth } from '@/features/transactions/date.ts'
@@ -27,7 +27,7 @@ export function HistoryPage() {
   const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const [statusMessage, setStatusMessage] = useState('이번 달 내역을 불러올 수 있습니다.')
+  const [statusMessage, setStatusMessage] = useState('')
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -56,7 +56,7 @@ export function HistoryPage() {
     loadRequestRef.current = requestId
     setIsLoading(true)
     setErrorMessage('')
-    setStatusMessage('내역을 불러오는 중입니다.')
+    setStatusMessage('')
     setTransactions([])
     setAccountBalances([])
 
@@ -69,7 +69,7 @@ export function HistoryPage() {
       if (loadRequestRef.current !== requestId) return
       setTransactions(result)
       setAccountBalances(balances)
-      setStatusMessage(result.length ? '내역을 불러왔습니다.' : '표시할 내역이 없습니다.')
+      setStatusMessage('')
     } catch (error) {
       if (loadRequestRef.current !== requestId) return
       setTransactions([])
@@ -180,6 +180,28 @@ export function HistoryPage() {
     void loadTransactions(filters)
   }
 
+  const toggleAccountFilter = (account: string) => {
+    setFilters((current) => ({
+      ...current,
+      account: current.account === account ? '' : account,
+    }))
+  }
+
+  const toggleCategoryFilter = (category: string) => {
+    setFilters((current) => ({
+      ...current,
+      category: current.category === category ? '' : category,
+    }))
+  }
+
+  const handleStatisticsItemClick = (label: string) => {
+    if (statisticsType === 'account') {
+      toggleAccountFilter(label)
+      return
+    }
+    toggleCategoryFilter(label)
+  }
+
   const moveMonth = (step: number) => {
     const nextMonth = shiftMonth(filters.month, step)
     const currentYear = Number(filters.month.slice(0, 4))
@@ -203,6 +225,12 @@ export function HistoryPage() {
     : linkedYears && !canGoNext
       ? `${nextYear}년 Sheet가 연결되지 않았습니다. 설정에서 연도를 연결하세요.`
       : ''
+  const accountFilterOptions = filters.account && !accounts.includes(filters.account)
+    ? [filters.account, ...accounts]
+    : accounts
+  const categoryFilterOptions = filters.category && !categories.includes(filters.category)
+    ? [filters.category, ...categories]
+    : categories
 
   const handleUpdate = async (payload: TransactionFormSubmitPayload) => {
     if (!payload.transaction) {
@@ -256,54 +284,34 @@ export function HistoryPage() {
   return (
     <section className="page">
       <section className="panel history-month-panel">
-        <div className="panel__header">
-          <div>
-            <h2>{formatMonthLabel(filters.month)}</h2>
-            <p className="panel__description">현재 월 기준으로 내역을 조회합니다.</p>
-          </div>
+        <div className="history-month-panel__toolbar">
           <button
             type="button"
-            className="secondary-button"
-            onClick={handleRefresh}
-            disabled={isLoading}
-          >
-            새로고침
-          </button>
-        </div>
-
-        <div className="month-switcher">
-          <button
-            type="button"
-            className="icon-button icon-button--soft"
+            className="icon-button icon-button--soft icon-button--compact"
             onClick={() => moveMonth(-1)}
             disabled={isLoading || !canGoPrevious}
             aria-label="이전 달"
           >
-            <span className="icon-button__emoji" aria-hidden="true">◀️</span>
+            <span aria-hidden="true">‹</span>
           </button>
-          <input
-            type="month"
-            value={filters.month}
-            onChange={(event) => {
-              const value = event.target.value
-              const year = Number(value.slice(0, 4))
-              if (linkedYears && !linkedYears.has(year)) {
-                setStatusMessage(`${year}년 Sheet가 연결되지 않았습니다. 설정에서 연도를 연결하세요.`)
-                return
-              }
-              setFilters((current) => ({ ...current, month: value }))
-            }}
-            aria-label="조회 월"
-            disabled={isLoading}
-          />
+          <h2>{formatMonthLabel(filters.month)}</h2>
           <button
             type="button"
-            className="icon-button icon-button--soft"
+            className="icon-button icon-button--soft icon-button--compact"
             onClick={() => moveMonth(1)}
             disabled={isLoading || !canGoNext}
             aria-label="다음 달"
           >
-            <span className="icon-button__emoji" aria-hidden="true">▶️</span>
+            <span aria-hidden="true">›</span>
+          </button>
+          <button
+            type="button"
+            className="icon-button icon-button--compact history-month-panel__refresh"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            aria-label="새로고침"
+          >
+            <span aria-hidden="true">↻</span>
           </button>
         </div>
 
@@ -315,20 +323,24 @@ export function HistoryPage() {
 
       <section className="panel account-balances" aria-labelledby="account-balances-title">
         <div className="panel__header">
-          <div>
-            <h2 id="account-balances-title">통장별 잔액</h2>
-            <p className="panel__description">{formatMonthLabel(filters.month)} 말 기준</p>
-          </div>
+          <h2 id="account-balances-title">통장별 잔액</h2>
+          <p className="panel__caption">{formatMonthLabel(filters.month)} 말 기준</p>
         </div>
         {accountBalances.length ? (
           <div className="account-balances__list">
             {accountBalances.map((account) => (
-              <div className="account-balances__item" key={account.account}>
+              <button
+                type="button"
+                className={`account-balances__item${filters.account === account.account ? ' is-active' : ''}`}
+                key={account.account}
+                aria-pressed={filters.account === account.account}
+                onClick={() => toggleAccountFilter(account.account)}
+              >
                 <span>{account.account}</span>
                 <strong className={account.balance < 0 ? 'is-negative' : ''}>
                   {formatKrw(account.balance)}
                 </strong>
-              </div>
+              </button>
             ))}
           </div>
         ) : (
@@ -368,7 +380,21 @@ export function HistoryPage() {
         {statistics.items.length ? (
           <div className="category-statistics__list">
             {statistics.items.map((item) => (
-              <div className="category-statistics__item" key={item.label}>
+              <button
+                type="button"
+                className={`category-statistics__item${(
+                  statisticsType === 'account'
+                    ? filters.account === item.label
+                    : filters.category === item.label
+                ) ? ' is-active' : ''}`}
+                key={item.label}
+                aria-pressed={
+                  statisticsType === 'account'
+                    ? filters.account === item.label
+                    : filters.category === item.label
+                }
+                onClick={() => handleStatisticsItemClick(item.label)}
+              >
                 <div className="category-statistics__heading">
                   <strong>{item.label}</strong>
                   <span>{formatKrw(item.amount)} · {Math.round(item.ratio)}%</span>
@@ -379,7 +405,7 @@ export function HistoryPage() {
                     style={{ width: `${item.ratio}%` }}
                   />
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         ) : (
@@ -434,7 +460,7 @@ export function HistoryPage() {
               }
             >
               <option value="">전체</option>
-              {accounts.map((account) => (
+              {accountFilterOptions.map((account) => (
                 <option key={account} value={account}>
                   {account}
                 </option>
@@ -450,7 +476,7 @@ export function HistoryPage() {
               }
             >
               <option value="">전체</option>
-              {categories.map((category) => (
+              {categoryFilterOptions.map((category) => (
                 <option key={category} value={category}>
                   {category}
                 </option>
@@ -498,12 +524,8 @@ export function HistoryPage() {
 
       <section className="panel">
         <div className="panel__header">
-          <div>
-            <h2>월별 내역</h2>
-            <p className="panel__description">
-              필터 결과 {filteredTransactions.length}건
-            </p>
-          </div>
+          <h2>월별 내역</h2>
+          <p className="panel__caption">필터 결과 {filteredTransactions.length}건</p>
         </div>
 
         {Object.keys(groupedTransactions).length ? (
@@ -511,68 +533,96 @@ export function HistoryPage() {
             {Object.entries(groupedTransactions).map(([date, items]) => (
               <section key={date} className="history-group">
                 <h3>{formatDateHeading(date)}</h3>
-                <div className="history-list">
-                  {items.map((transaction, index) => {
-                    const transactionKey = transaction.id ?? `${date}-${transaction.sourceRow ?? index}-${transaction.description}-${transaction.amount}`
-                    const isEditing = editing === transaction
-                    return (
-                    <div className={`history-item-wrap${isEditing ? ' is-editing' : ''}`} key={transactionKey}>
-                    <button
-                      type="button"
-                      className="history-item history-item--button"
-                      aria-expanded={isEditing}
-                      onClick={() => setEditing(isEditing ? null : transaction)}
-                    >
-                      <div>
-                        <strong>{transaction.description}</strong>
-                        <p>
-                          {transaction.account}
-                          {transaction.destinationAccount
-                            ? ` → ${transaction.destinationAccount}`
-                            : ''}
-                          {transaction.category ? ` · ${transaction.category}` : ''}
-                        </p>
-                      </div>
-                      <div className="history-item__meta">
-                        <strong>
-                          {formatKrw(
-                            transaction.type === 'transfer'
-                              ? Math.abs(transaction.amount)
-                              : transaction.amount,
-                          )}
-                        </strong>
-                        <span className="history-item__edit-label">{isEditing ? '닫기' : '수정'}</span>
-                      </div>
-                    </button>
-                    {isEditing ? (
-                      <div className="history-item__editor">
-                        <TransactionForm
-                          mode="edit"
-                          title="거래 수정"
-                          accounts={accounts}
-                          categories={categories}
-                          isBusy={isSaving}
-                          isWriteEnabled={service.hasWriteAccess}
-                          submitLabel="변경사항 저장"
-                          errorMessage=""
-                          statusMessage=""
-                          initialTransaction={editing!}
-                          onSubmit={handleUpdate}
-                          onCancel={() => setEditing(null)}
-                        />
-                        <button
-                          type="button"
-                          className="secondary-button secondary-button--full secondary-button--danger"
-                          disabled={isSaving || !service.hasWriteAccess}
-                          onClick={() => setPendingDelete(editing!)}
-                        >
-                          거래 삭제
-                        </button>
-                      </div>
-                    ) : null}
-                    </div>
-                    )
-                  })}
+                <div className="history-table-wrap">
+                  <table className="history-table">
+                    <caption className="sr-only">{formatDateHeading(date)} 거래 내역</caption>
+                    <colgroup>
+                      <col className="history-table__description-column" />
+                      <col className="history-table__amount-column" />
+                      <col className="history-table__account-column" />
+                      <col className="history-table__category-column" />
+                      <col className="history-table__action-column" />
+                    </colgroup>
+                    <thead className="sr-only">
+                      <tr>
+                        <th>내용</th>
+                        <th>금액</th>
+                        <th>통장</th>
+                        <th>카테고리</th>
+                        <th>수정</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((transaction, index) => {
+                        const transactionKey = transaction.id ?? `${date}-${transaction.sourceRow ?? index}-${transaction.description}-${transaction.amount}`
+                        const isEditing = editing === transaction
+                        return (
+                          <Fragment key={transactionKey}>
+                            <tr className={isEditing ? 'is-editing' : ''}>
+                              <td className="history-table__description" title={transaction.description}>
+                                {transaction.description}
+                              </td>
+                              <td className="history-table__amount">
+                                {formatKrw(
+                                  transaction.type === 'transfer'
+                                    ? Math.abs(transaction.amount)
+                                    : transaction.amount,
+                                )}
+                              </td>
+                              <td className="history-table__account" title={transaction.account}>
+                                {transaction.account}
+                                {transaction.destinationAccount ? `→${transaction.destinationAccount}` : ''}
+                              </td>
+                              <td className="history-table__category" title={transaction.category ?? ''}>
+                                {transaction.category ?? '–'}
+                              </td>
+                              <td className="history-table__action">
+                                <button
+                                  type="button"
+                                  className="text-button history-table__edit-button"
+                                  aria-label={`${transaction.description} ${isEditing ? '닫기' : '수정'}`}
+                                  aria-expanded={isEditing}
+                                  onClick={() => setEditing(isEditing ? null : transaction)}
+                                >
+                                  {isEditing ? '닫기' : '수정'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isEditing ? (
+                              <tr className="history-table__editor-row">
+                                <td colSpan={5}>
+                                  <div className="history-item__editor">
+                                    <TransactionForm
+                                      mode="edit"
+                                      title="거래 수정"
+                                      accounts={accounts}
+                                      categories={categories}
+                                      isBusy={isSaving}
+                                      isWriteEnabled={service.hasWriteAccess}
+                                      submitLabel="변경사항 저장"
+                                      errorMessage=""
+                                      statusMessage=""
+                                      initialTransaction={editing!}
+                                      onSubmit={handleUpdate}
+                                      onCancel={() => setEditing(null)}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="secondary-button secondary-button--full secondary-button--danger"
+                                      disabled={isSaving || !service.hasWriteAccess}
+                                      onClick={() => setPendingDelete(editing!)}
+                                    >
+                                      거래 삭제
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             ))}

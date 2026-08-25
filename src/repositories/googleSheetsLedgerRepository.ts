@@ -181,12 +181,16 @@ export class GoogleSheetsLedgerRepository implements LedgerRepository {
     }
 
     const config = await this.#resolveYearConfig(year)
-    const values = await this.#sheetsClient.getValues(
-      config.spreadsheetId,
+    const ranges = [
       buildRange(String(month), 'G2:I8'),
+      buildRange(String(month), 'G11:I12'),
+    ]
+    const { valueRanges } = await this.#sheetsClient.batchGetValues(
+      config.spreadsheetId,
+      ranges,
     )
 
-    return (values.values ?? []).flatMap((row) => {
+    return valueRanges.flatMap((values) => values.values ?? []).flatMap((row) => {
       const account = trimCell(row[0])
       return account
         ? [{ account, balance: parseSheetNumber(row[2]) }]

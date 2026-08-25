@@ -152,9 +152,81 @@ describe('HistoryPage', () => {
     await user.click(transactionButton)
 
     expect(transactionButton).toHaveAttribute('aria-expanded', 'true')
-    const item = transactionButton.closest<HTMLElement>('.history-item-wrap')!
-    expect(within(item).getByRole('heading', { name: '거래 수정' })).toBeVisible()
-    expect(within(item).getByRole('button', { name: '거래 삭제' })).toBeVisible()
+    const table = transactionButton.closest<HTMLTableElement>('table')!
+    expect(within(table).getByRole('heading', { name: '거래 수정' })).toBeVisible()
+    expect(within(table).getByRole('button', { name: '거래 삭제' })).toBeVisible()
+  })
+
+  it('combines month navigation with the title and keeps refresh as an icon button', async () => {
+    const user = userEvent.setup()
+    const { listTransactions } = renderHistory()
+
+    expect(await screen.findByRole('heading', { name: '2026년 8월' })).toBeVisible()
+    expect(screen.queryByText('현재 월 기준으로 내역을 조회합니다.')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('조회 월')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '새로고침' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: '다음 달' }))
+
+    expect(await screen.findByRole('heading', { name: '2026년 9월' })).toBeVisible()
+    await waitFor(() => expect(listTransactions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ month: '2026-09' }),
+    ))
+  })
+
+  it('renders each date as one compact transaction table', async () => {
+    renderHistory()
+
+    const dateHeading = await screen.findByRole('heading', { name: /8월 10일/ })
+    const dateSection = dateHeading.closest('section')!
+    const table = within(dateSection).getByRole('table')
+
+    expect(within(table).getAllByRole('row')).toHaveLength(5)
+    expect(within(table).getByRole('columnheader', { name: '내용' })).toBeInTheDocument()
+    expect(within(table).getByText('점심 식사')).toBeVisible()
+    expect(within(table).getByText('-₩12,500')).toBeVisible()
+  })
+
+  it('toggles account balances as the linked account filter', async () => {
+    const user = userEvent.setup()
+    renderHistory()
+    const accountFilter = await screen.findByRole('combobox', { name: '계좌' })
+    const savingsBalance = screen.getByRole('button', { name: /저축 통장.*₩5,000,000/ })
+
+    await user.click(savingsBalance)
+
+    expect(accountFilter).toHaveValue('저축 통장')
+    expect(screen.getByText('저축 이체')).toBeVisible()
+    expect(screen.queryByText('점심 식사')).not.toBeInTheDocument()
+    expect(savingsBalance).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(savingsBalance)
+
+    expect(accountFilter).toHaveValue('')
+    expect(await screen.findByText('점심 식사')).toBeVisible()
+  })
+
+  it('toggles category statistics and combines them with the account filter', async () => {
+    const user = userEvent.setup()
+    renderHistory()
+    const categoryFilter = await screen.findByRole('combobox', { name: '분류' })
+    const accountFilter = screen.getByRole('combobox', { name: '계좌' })
+    const foodStatistic = screen.getByRole('button', { name: /식비.*₩12,500/ })
+
+    await user.click(foodStatistic)
+    expect(categoryFilter).toHaveValue('식비')
+    expect(screen.getByText('점심 식사')).toBeVisible()
+    expect(screen.queryByText('월급')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /저축 통장.*₩5,000,000/ }))
+    expect(categoryFilter).toHaveValue('식비')
+    expect(accountFilter).toHaveValue('저축 통장')
+    expect(screen.getByText('조건에 맞는 거래가 없습니다.')).toBeVisible()
+
+    await user.click(foodStatistic)
+    expect(categoryFilter).toHaveValue('')
+    expect(accountFilter).toHaveValue('저축 통장')
+    expect(await screen.findByText('저축 이체')).toBeVisible()
   })
 
   it('filters the loaded month locally without another Sheets request', async () => {

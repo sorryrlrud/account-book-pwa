@@ -311,6 +311,16 @@ textarea:focus-visible {
   gap: 12px;
 }
 
+.panel__caption {
+  flex: 0 0 auto;
+  align-self: baseline;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .icon-button,
 .text-button,
 .primary-button,
@@ -349,6 +359,15 @@ textarea:focus-visible {
   color: var(--color-primary);
   font-size: 1.2rem;
   font-weight: 800;
+}
+
+.icon-button--compact {
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 .text-button,
@@ -706,7 +725,32 @@ button:not(:disabled):active {
 
 .history-groups {
   display: grid;
-  gap: 16px;
+  gap: 10px;
+}
+
+.history-month-panel {
+  gap: 8px;
+  padding-block: 11px;
+}
+
+.history-month-panel__toolbar {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px 34px;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-month-panel__toolbar h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  text-align: center;
+  letter-spacing: -0.04em;
+}
+
+.history-month-panel__refresh {
+  margin-left: 2px;
+  color: var(--color-muted);
+  font-size: 1.08rem;
 }
 
 .history-list {
@@ -747,7 +791,99 @@ button:not(:disabled):active {
 
 .history-group {
   display: grid;
-  gap: 10px;
+  gap: 6px;
+}
+
+.history-group h3 {
+  font-size: 0.84rem;
+  color: #465049;
+}
+
+.history-table-wrap {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e4e9e5;
+  border-radius: var(--radius-sm);
+  background: var(--color-field);
+}
+
+.history-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.history-table__description-column {
+  width: 29%;
+}
+
+.history-table__amount-column {
+  width: 24%;
+}
+
+.history-table__account-column {
+  width: 23%;
+}
+
+.history-table__category-column {
+  width: 14%;
+}
+
+.history-table__action-column {
+  width: 10%;
+}
+
+.history-table td {
+  overflow: hidden;
+  padding: 7px 4px;
+  border-bottom: 1px solid #e9ede9;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-table tbody tr:last-child td,
+.history-table__editor-row td {
+  border-bottom: 0;
+}
+
+.history-table tr.is-editing > td {
+  background: var(--color-primary-soft);
+}
+
+.history-table__description {
+  padding-left: 9px !important;
+  font-weight: 700;
+}
+
+.history-table__amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.history-table__account,
+.history-table__category {
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.history-table__action {
+  padding-right: 3px !important;
+  text-align: right;
+}
+
+.history-table__edit-button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 2px;
+  font-size: 0.7rem;
+}
+
+.history-table__editor-row td {
+  padding: 7px;
+  white-space: normal;
 }
 
 .history-item {
@@ -801,7 +937,10 @@ button:not(:disabled):active {
 
 .account-balances__list {
   display: grid;
-  gap: 8px;
+  overflow: hidden;
+  border: 1px solid #e4e9e5;
+  border-radius: var(--radius-sm);
+  background: var(--color-field);
 }
 
 .account-balances__item {
@@ -810,10 +949,20 @@ button:not(:disabled):active {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 11px 12px;
-  border: 1px solid #e4e9e5;
-  border-radius: var(--radius-sm);
-  background: var(--color-field);
+  width: 100%;
+  padding: 7px 10px;
+  border-bottom: 1px solid #e4e9e5;
+  background: transparent;
+  text-align: left;
+}
+
+.account-balances__item:last-child {
+  border-bottom: 0;
+}
+
+.account-balances__item.is-active {
+  background: var(--color-primary-soft);
+  box-shadow: inset 3px 0 0 var(--color-primary);
 }
 
 .account-balances__item span {
@@ -846,6 +995,15 @@ button:not(:disabled):active {
 
 .category-statistics__item {
   gap: 7px;
+  width: 100%;
+  padding: 4px;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.category-statistics__item.is-active {
+  background: var(--color-primary-soft);
+  box-shadow: 0 0 0 1px #c9ddd3;
 }
 
 .category-statistics__heading {
