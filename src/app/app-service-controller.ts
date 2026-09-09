@@ -350,6 +350,13 @@ export class AppServiceController {
         month,
         true,
       )
+      if (identityService.getReusableToken()) {
+        this.#state = createTransientAuthState(
+          this.#state,
+          'bootstrapping',
+          '이전 로그인으로 가계부를 불러오는 중입니다.',
+        )
+      }
     } catch (error) {
       const appError = normalizeError(error)
       this.#state = createUnconfiguredState(year, month, appError.userMessage)
@@ -404,6 +411,7 @@ export class AppServiceController {
     }
 
     services.tokenStore.clear()
+    services.identityService.forgetAccount()
     this.#clearAuthorizedData()
     this.#setState(
       createSignedOutState(
@@ -672,6 +680,13 @@ export class AppServiceController {
     prompt: '' | 'consent' | 'select_account',
   ): Promise<void> {
     const services = this.#requireServices()
+    if (prompt === '' && services.identityService.getReusableToken()) {
+      if (this.#resumePromise) {
+        return this.#resumePromise
+      }
+      await this.#runBootstrap()
+      return
+    }
     this.#setState(
       createTransientAuthState(
         this.#state,

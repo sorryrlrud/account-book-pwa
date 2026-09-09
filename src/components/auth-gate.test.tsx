@@ -47,7 +47,7 @@ describe('AuthGate', () => {
     expect(service.relogin).not.toHaveBeenCalled()
   })
 
-  it('forces account selection only after access is denied', async () => {
+  it('uses account selection as the primary action after access is denied', async () => {
     const user = userEvent.setup()
     const service = createService('access_denied')
     renderGate(service)
@@ -56,6 +56,26 @@ describe('AuthGate', () => {
 
     expect(service.relogin).toHaveBeenCalledOnce()
     expect(service.login).not.toHaveBeenCalled()
+  })
+
+  it('lets the user bypass a remembered account while signed out', async () => {
+    const user = userEvent.setup()
+    const service = createService('signed_out')
+    renderGate(service)
+
+    await user.click(screen.getByRole('button', { name: '다른 계정으로 로그인' }))
+
+    expect(service.relogin).toHaveBeenCalledOnce()
+    expect(service.login).not.toHaveBeenCalled()
+  })
+
+  it('disables both login actions while restoring a stored session', () => {
+    const service = createService('bootstrapping')
+    service.auth.isBusy = true
+    renderGate(service)
+
+    expect(screen.getByRole('button', { name: '확인 중...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '다른 계정으로 로그인' })).toBeDisabled()
   })
 
   it('retries Sheet bootstrap without reopening Google after a network error', async () => {

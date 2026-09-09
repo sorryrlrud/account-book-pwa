@@ -25,6 +25,8 @@ Google Spreadsheet를 Source of Truth로 사용하는 모바일 우선 가계부
 - Client Secret, refresh token, 비밀번호는 저장하지 않는다.
 - 단기 access token은 새로고침 복구를 위해 현재 탭의 `sessionStorage`에만 저장하고,
   탭을 닫거나 로그아웃하거나 토큰이 만료되면 제거한다.
+- 다음 연결에서 같은 계정을 선택하도록 Google 계정 ID(`sub`)만 `localStorage`에 기억한다.
+  이 값은 계정 선택 힌트이며, 접근 권한은 매번 Google OAuth와 Sheet 검증으로 확인한다.
 - `.env.local`은 git에 추가하지 않는다.
 - 실패 여부가 모호한 금융 write를 자동 재실행하지 않는다.
 - 삭제·일괄 변경·이월 초기화·0월 동기화 같은 파괴적 또는 광범위한 작업은 확인 절차를 유지한다.
@@ -91,10 +93,19 @@ https://sorryrlrud.github.io
 
 - GitHub Pages는 origin 단위로 등록한다. repository path는 origin에 포함하지 않는다.
 - 이 앱은 backend redirect flow가 아니라 browser token flow를 전제로 한다.
-- 이메일 scope는 요청하지 않으며 설정 화면에는 Google 계정의 연결 상태만 표시한다.
+- Sheets scope와 계정 ID 확인용 `openid` scope를 요청한다. 이메일·프로필 scope는 요청하지 않는다.
+- 처음 업데이트 후 재연결할 때 계정 ID 확인에 대한 Google 동의가 한 번 추가될 수 있다.
 - 설치 PWA를 다시 열었을 때 현재 실행 세션의 access token이 남아 있으면 자동 복구한다.
-- token이 만료되었거나 실행 세션이 종료된 경우 한 번의 사용자 탭으로 새 token을 요청하되,
-  접근 거부로 다른 계정이 필요한 경우에만 Google 계정 선택을 강제한다.
+- 유효한 token이 있으면 연결 재시도에도 그대로 사용하여 Google 창을 다시 열지 않는다.
+- token이 만료되었거나 실행 세션이 종료된 경우 사용자 탭으로 새 token을 요청하고,
+  기억한 계정 ID를 `login_hint`로 전달해 Google 계정 선택을 줄인다.
+- 로그인 화면의 `다른 계정으로 로그인`은 기억한 계정을 지우고 계정 선택을 연다.
+  로그아웃하면 저장된 token과 기억한 계정도 지운다.
+- 계정 ID 조회나 브라우저 저장소 사용이 실패해도 가계부 로그인은 계속 진행한다.
+- GitHub Pages의 GIS token flow는 만료 후 사용자 조작이 필요하다. 계정 선택이 생략되어도
+  Google 팝업 자체는 잠시 나타날 수 있으며, 완전한 장기 로그인에는 별도 인증 서버가 필요하다.
+  참고: [Google token model](https://developers.google.com/identity/oauth2/web/guides/use-token-model),
+  [login_hint reference](https://developers.google.com/identity/oauth2/web/reference/js-reference).
 
 ## Google Spreadsheet setup
 

@@ -4,6 +4,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { AppServiceContext, defaultAppService, type AppService } from '@/app/app-service-core.ts'
 import { HistoryPage } from '@/pages/HistoryPage.tsx'
 
+// Match the fixture month regardless of the calendar date of the CI run.
+vi.mock('@/features/transactions/date.ts', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/features/transactions/date.ts')>(),
+  currentMonthValue: () => '2026-08',
+}))
+
 function renderHistory(overrides: Partial<AppService> = {}) {
   const listTransactions = vi.fn<AppService['listTransactions']>().mockResolvedValue([
     {

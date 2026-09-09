@@ -69,6 +69,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
           </button>
         ) : null}
 
+        {isConfigured && !isAccessDenied ? (
+          <button
+            type="button"
+            className="secondary-button auth-card__button"
+            disabled={auth.isBusy}
+            onClick={() => { void runAction(() => service.relogin()) }}
+          >
+            다른 계정으로 로그인
+          </button>
+        ) : null}
+
         <p className="auth-card__safety">
           저장한 거래는 연결된 Google Sheet에 바로 반영됩니다.
         </p>

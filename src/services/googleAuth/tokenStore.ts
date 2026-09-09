@@ -39,6 +39,7 @@ function parseSnapshot(value: string | null): AccessTokenSnapshot | undefined {
       typeof parsed.accessToken !== 'string' ||
       !parsed.accessToken ||
       typeof parsed.expiresAt !== 'number' ||
+      !Number.isFinite(parsed.expiresAt) ||
       !Array.isArray(parsed.scopes) ||
       !parsed.scopes.every((scope) => typeof scope === 'string')
     ) {
@@ -96,6 +97,18 @@ export class InMemoryTokenStore {
 
   get(): AccessTokenSnapshot | undefined {
     return this.#snapshot
+  }
+
+  getValidToken(scopes: readonly string[] = [], now = Date.now()): AccessTokenSnapshot | undefined {
+    const snapshot = this.#snapshot
+    if (
+      !snapshot ||
+      snapshot.expiresAt <= now ||
+      !scopes.every((scope) => snapshot.scopes.includes(scope))
+    ) {
+      return undefined
+    }
+    return snapshot
   }
 
   requireValidToken(now = Date.now()): AccessTokenSnapshot {
